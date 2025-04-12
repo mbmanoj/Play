@@ -16,58 +16,57 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            max-height: 100vh; /* Constrain to viewport */
-            overflow: hidden; /* Prevent scrolling */
+            max-height: 100vh;
+            overflow: hidden;
         }
         .container {
             background: white;
-            padding: 3vw; /* Reduced padding */
-            border-radius: 15px;
+            padding: min(3vw, 15px); /* Scale padding, cap for desktop */
+            border-radius: min(4vw, 15px);
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-            max-width: 90vw;
+            max-width: min(90vw, 600px); /* Cap width for desktop */
             width: 100%;
             box-sizing: border-box;
             height: auto;
-            max-height: 90vh; /* Fit within viewport */
+            max-height: 90vh;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
         #namePrompt {
-            margin-bottom: 2vw;
+            margin-bottom: min(2vw, 10px);
         }
         #welcomeTitle {
             font-family: 'Poppins', sans-serif;
-            font-size: 7vw; /* Smaller font */
+            font-size: min(7vw, 2rem); /* Responsive, capped */
             font-weight: 600;
             color: #2c3e50;
-            margin: 1vw 0;
+            margin: min(1vw, 5px) 0;
             animation: fadeIn 1s ease-in-out;
         }
         #instructions {
             font-family: 'Roboto', sans-serif;
-            font-size: 3.5vw; /* Smaller font */
+            font-size: min(3.5vw, 1rem);
             color: #34495e;
-            margin: 1vw 0 3vw 0;
+            margin: min(1vw, 5px) 0 min(2vw, 10px) 0;
             line-height: 1.4;
             background: rgba(255, 255, 255, 0.8);
-            padding: 2vw;
-            border-radius: 8px;
+            padding: min(2vw, 10px);
+            border-radius: min(2vw, 8px);
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             animation: slideIn 1s ease-in-out;
         }
         #userName {
-            padding: 2vw;
-            font-size: 3.5vw;
+            padding: min(2vw, 8px);
+            font-size: min(3.5vw, 1rem);
             border: 2px solid #74ebd5;
-            border-radius: 8px;
-            width: 50vw;
-            max-width: 250px;
+            border-radius: min(2vw, 8px);
+            width: min(50vw, 250px);
             outline: none;
             transition: border-color 0.3s, box-shadow 0.3s;
             font-family: 'Roboto', sans-serif;
             display: block;
-            margin: 0 auto 3vw auto; /* Reduced spacing */
+            margin: 0 auto min(3vw, 15px) auto;
             box-sizing: border-box;
         }
         #userName:focus {
@@ -75,15 +74,14 @@
             box-shadow: 0 0 8px rgba(44, 62, 80, 0.3);
         }
         #startButton {
-            padding: 2vw;
-            font-size: 3.5vw;
-            width: 50vw;
-            max-width: 250px;
+            padding: min(2vw, 8px);
+            font-size: min(3.5vw, 1rem);
+            width: min(50vw, 250px);
             cursor: pointer;
             background: linear-gradient(135deg, #74ebd5, #acb6e5);
             color: #fff;
             border: none;
-            border-radius: 8px;
+            border-radius: min(2vw, 8px);
             transition: background 0.3s, transform 0.2s;
             font-family: 'Poppins', sans-serif;
             font-weight: 600;
@@ -94,17 +92,17 @@
             transform: scale(1.05);
         }
         #gameTitle {
-            font-size: 4vw; /* Smaller font */
+            font-size: min(4vw, 1.2rem);
             font-weight: 600;
             color: #2c3e50;
-            margin: 1vw 0;
+            margin: min(1vw, 5px) 0;
             display: none;
             font-family: 'Poppins', sans-serif;
             animation: fadeIn 0.5s ease-in-out;
         }
         #colorText {
-            font-size: 6vw; /* Smaller font */
-            margin: 1vw 0;
+            font-size: min(6vw, 1.8rem);
+            margin: min(1vw, 5px) 0;
             font-weight: bold;
             color: #333;
             display: none;
@@ -115,53 +113,52 @@
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
-            margin: 1vw 0;
+            margin: min(1vw, 5px) 0;
         }
         .colorButton {
-            padding: 2vw 4vw; /* Smaller buttons */
-            margin: 1vw;
-            font-size: 3.5vw;
+            padding: min(2vw, 8px) min(4vw, 16px);
+            margin: min(1vw, 5px);
+            font-size: min(3.5vw, 1rem);
             cursor: pointer;
             border: none;
             color: white;
-            border-radius: 8px;
+            border-radius: min(2vw, 8px);
             display: none;
             transition: transform 0.2s;
             font-family: 'Poppins', sans-serif;
             font-weight: 600;
             touch-action: manipulation;
-            min-width: 15vw;
+            min-width: min(15vw, 80px);
         }
         .colorButton:hover {
             transform: scale(1.05);
         }
         #score {
-            font-size: 4vw; /* Smaller font */
-            margin: 1vw 0;
+            font-size: min(4vw, 1.2rem);
+            margin: min(1vw, 5px) 0;
             color: #34495e;
             display: none;
             font-family: 'Roboto', sans-serif;
         }
         #gameOver {
-            font-size: 5vw; /* Smaller font */
+            font-size: min(5vw, 1.5rem);
             color: #d4a017;
             display: none;
             font-weight: bold;
-            margin: 1vw 0;
+            margin: min(1vw, 5px) 0;
             animation: popIn 0.5s ease-in-out;
             font-family: 'Poppins', sans-serif;
         }
         #playAgainButton {
-            padding: 2vw;
-            font-size: 3.5vw;
-            width: 50vw;
-            max-width: 250px;
+            padding: min(2vw, 8px);
+            font-size: min(3.5vw, 1rem);
+            width: min(50vw, 250px);
             cursor: pointer;
             background: linear-gradient(135deg, #74ebd5, #acb6e5);
             color: white;
             border: none;
-            border-radius: 8px;
-            margin: 1vw auto;
+            border-radius: min(2vw, 8px);
+            margin: min(1vw, 5px) auto;
             transition: background 0.3s, transform 0.2s;
             display: none;
             font-family: 'Poppins', sans-serif;
@@ -174,14 +171,14 @@
         }
         #exitButton {
             position: absolute;
-            top: 1vh; /* Adjusted for viewport height */
-            right: 2vw;
-            font-size: 3vw;
-            padding: 1.5vw 3vw;
+            top: min(1vh, 10px);
+            right: min(2vw, 10px);
+            font-size: min(3vw, 0.9rem);
+            padding: min(1.5vw, 6px) min(3vw, 12px);
             background: #e74c3c;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: min(1vw, 5px);
             cursor: pointer;
             transition: background 0.3s, transform 0.2s;
             display: none;
@@ -195,14 +192,14 @@
         }
         #soundControl {
             position: absolute;
-            top: 1vh;
-            left: 2vw;
-            font-size: 3vw;
-            padding: 1.5vw 3vw;
+            top: min(1vh, 10px);
+            left: min(2vw, 10px);
+            font-size: min(3vw, 0.9rem);
+            padding: min(1.5vw, 6px) min(3vw, 12px);
             background: #34495e;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: min(1vw, 5px);
             cursor: pointer;
             font-family: 'Poppins', sans-serif;
             transition: background 0.3s;
@@ -223,84 +220,135 @@
             0% { transform: scale(0.5); opacity: 0; }
             100% { transform: scale(1); opacity: 1; }
         }
-        /* Mobile-specific adjustments */
+        /* Mobile adjustments */
         @media (max-width: 600px) {
             .container {
-                padding: 4vw;
-                max-height: 95vh; /* Tighter fit */
+                padding: min(4vw, 12px);
+                max-height: 95vh;
             }
             #welcomeTitle {
-                font-size: 8vw;
+                font-size: min(8vw, 1.8rem);
             }
             #instructions {
-                font-size: 4vw;
-                padding: 3vw;
-                margin-bottom: 2vw;
+                font-size: min(4vw, 0.9rem);
+                padding: min(3vw, 8px);
+                margin-bottom: min(2vw, 8px);
             }
             #userName {
-                width: 60vw;
-                font-size: 4vw;
-                padding: 3vw;
-                margin-bottom: 4vw;
+                width: min(60vw, 220px);
+                font-size: min(4vw, 0.9rem);
+                padding: min(3vw, 8px);
+                margin-bottom: min(4vw, 12px);
             }
             #startButton {
-                width: 60vw;
-                font-size: 4vw;
-                padding: 3vw;
+                width: min(60vw, 220px);
+                font-size: min(4vw, 0.9rem);
+                padding: min(3vw, 8px);
             }
             #gameTitle {
-                font-size: 4.5vw;
-                margin: 1.5vw 0;
+                font-size: min(4.5vw, 1rem);
+                margin: min(1.5vw, 6px) 0;
             }
             #colorText {
-                font-size: 7vw;
-                margin: 1.5vw 0;
+                font-size: min(7vw, 1.5rem);
+                margin: min(1.5vw, 6px) 0;
             }
             .colorButton {
-                padding: 3vw 5vw;
-                font-size: 4vw;
-                margin: 1.5vw;
-                min-width: 18vw;
+                padding: min(3vw, 8px) min(5vw, 12px);
+                font-size: min(4vw, 0.9rem);
+                margin: min(1.5vw, 6px);
+                min-width: min(18vw, 70px);
             }
             #score {
-                font-size: 4.5vw;
-                margin: 1.5vw 0;
+                font-size: min(4.5vw, 1rem);
+                margin: min(1.5vw, 6px) 0;
             }
             #gameOver {
-                font-size: 5.5vw;
-                margin: 1.5vw 0;
+                font-size: min(5.5vw, 1.2rem);
+                margin: min(1.5vw, 6px) 0;
             }
             #playAgainButton {
-                width: 60vw;
-                font-size: 4vw;
-                padding: 3vw;
-                margin: 1.5vw auto;
+                width: min(60vw, 220px);
+                font-size: min(4vw, 0.9rem);
+                padding: min(3vw, 8px);
+                margin: min(1.5vw, 6px) auto;
             }
             #exitButton, #soundControl {
-                font-size: 3.5vw;
-                padding: 2vw 4vw;
-                top: 1.5vh;
+                font-size: min(3.5vw, 0.8rem);
+                padding: min(2vw, 6px) min(4vw, 10px);
+                top: min(1.5vh, 8px);
             }
             #exitButton {
-                right: 3vw;
+                right: min(3vw, 8px);
             }
             #soundControl {
-                left: 3vw;
+                left: min(3vw, 8px);
+            }
+        }
+        /* Desktop adjustments */
+        @media (min-width: 601px) {
+            .container {
+                padding: min(2vw, 20px);
+                max-width: min(80vw, 500px); /* Slightly narrower for desktop */
+            }
+            #welcomeTitle {
+                font-size: min(6vw, 2.2rem);
+            }
+            #instructions {
+                font-size: min(3vw, 1.1rem);
+                padding: min(2vw, 12px);
+            }
+            #userName {
+                width: min(40vw, 300px);
+                font-size: min(3vw, 1.1rem);
+                padding: min(2vw, 10px);
+            }
+            #startButton {
+                width: min(40vw, 300px);
+                font-size: min(3vw, 1.1rem);
+                padding: min(2vw, 10px);
+            }
+            #gameTitle {
+                font-size: min(3.5vw, 1.3rem);
+            }
+            #colorText {
+                font-size: min(5vw, 2rem);
+            }
+            .colorButton {
+                padding: min(2vw, 10px) min(4vw, 20px);
+                font-size: min(3vw, 1.1rem);
+                min-width: min(12vw, 100px);
+            }
+            #score {
+                font-size: min(3.5vw, 1.3rem);
+            }
+            #gameOver {
+                font-size: min(4vw, 1.6rem);
+            }
+            #playAgainButton {
+                width: min(40vw, 300px);
+                font-size: min(3vw, 1.1rem);
+                padding: min(2vw, 10px);
+            }
+            #exitButton, #soundControl {
+                font-size: min(2.5vw, 1rem);
+                padding: min(1.5vw, 8px) min(3vw, 15px);
             }
         }
     </style>
 </head>
 <body>
     <audio id="backgroundMusic" loop muted>
-        <source src="./next-level_medium-2-322999.mp3" type="audio/mpeg">
+        <source src="./background.mp3" type="audio/mpeg">
         Your browser does not support the audio element.
     </audio>
     <button id="soundControl" onclick="toggleSound()">Sound: On</button>
     <button id="exitButton" onclick="exitGame()">Exit</button>
     <div class="container">
         <div id="namePrompt">
-            <div id="welcomeTitle">Color Click </div>
+            <div id="welcomeTitle">Color Click Challenge</div>
             <div id="instructions">
+                Welcome to the Color Click Game!<br>
                 A color name will appear in a colored font.<br>
                 Click the button labeled with the <strong>color name shown</strong> (ignore the font color).<br>
                 Correct clicks increase score and speed, wrong clicks slow the game.<br>
