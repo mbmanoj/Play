@@ -61,6 +61,8 @@
             outline: none;
             transition: border-color 0.3s, box-shadow 0.3s;
             font-family: 'Roboto', sans-serif;
+            display: block;
+            margin: 0 auto 20px auto;
         }
         #userName:focus {
             border-color: #2c3e50;
@@ -75,7 +77,6 @@
             color: #fff;
             border: none;
             border-radius: 10px;
-            margin-top: 15px;
             transition: background 0.3s, transform 0.2s;
             font-family: 'Poppins', sans-serif;
             font-weight: 600;
@@ -83,6 +84,15 @@
         #startButton:hover {
             background: linear-gradient(135deg, #67d3c2, #98a2d7);
             transform: scale(1.05);
+        }
+        #gameTitle {
+            font-size: 1.8em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 20px 0;
+            display: none;
+            font-family: 'Poppins', sans-serif;
+            animation: fadeIn 0.5s ease-in-out;
         }
         #colorText {
             font-size: 2.5em;
@@ -144,10 +154,30 @@
             background: linear-gradient(135deg, #67d3c2, #98a2d7);
             transform: scale(1.05);
         }
-        #soundControl {
+        #exitButton {
             position: absolute;
             top: 20px;
             right: 20px;
+            font-size: 1em;
+            padding: 8px 15px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.2s;
+            display: none;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+        }
+        #exitButton:hover {
+            background: #c0392b;
+            transform: scale(1.05);
+        }
+        #soundControl {
+            position: absolute;
+            top: 20px;
+            left: 20px; /* Moved to top-left */
             font-size: 1em;
             padding: 8px 15px;
             background: #34495e;
@@ -177,10 +207,11 @@
 </head>
 <body>
     <audio id="backgroundMusic" loop muted>
-        <source src="./background 1.mp3" type="audio/mpeg">
+        <source src="./background.mp3" type="audio/mpeg">
         Your browser does not support the audio element.
     </audio>
     <button id="soundControl" onclick="toggleSound()">Sound: On</button>
+    <button id="exitButton" onclick="exitGame()">Exit</button>
     <div class="container">
         <div id="namePrompt">
             <div id="welcomeTitle">Color Click Challenge</div>
@@ -195,6 +226,7 @@
             <input type="text" id="userName" placeholder="Your name">
             <button id="startButton" onclick="startGame()">Start Game</button>
         </div>
+        <div id="gameTitle"></div>
         <div id="colorText"></div>
         <div>
             <button class="colorButton" style="background-color: red;" onclick="checkColor('red')">Red</button>
@@ -268,9 +300,12 @@
         function startGame() {
             userName = document.getElementById('userName').value.trim() || 'Player';
             document.getElementById('namePrompt').style.display = 'none';
+            document.getElementById('gameTitle').style.display = 'block';
+            document.getElementById('gameTitle').textContent = `${userName}, you can do it!`;
             document.getElementById('colorText').style.display = 'block';
             document.querySelectorAll('.colorButton').forEach(btn => btn.style.display = 'inline-block');
             document.getElementById('score').style.display = 'block';
+            document.getElementById('exitButton').style.display = 'block';
             gameActive = true;
 
             // Unmute music on first interaction
@@ -286,9 +321,11 @@
         function endGame() {
             gameActive = false;
             clearTimeout(gameTimer);
+            document.getElementById('gameTitle').style.display = 'none';
             document.getElementById('colorText').style.display = 'none';
             document.querySelectorAll('.colorButton').forEach(btn => btn.style.display = 'none');
             document.getElementById('score').style.display = 'none';
+            document.getElementById('exitButton').style.display = 'none';
             const gameOverDiv = document.getElementById('gameOver');
             gameOverDiv.textContent = `🎉 Congratulations, ${userName}! You scored ${score} points! Amazing job! 🎉`;
             gameOverDiv.style.display = 'block';
@@ -297,11 +334,31 @@
             backgroundMusic.currentTime = 0; // Reset to start
         }
 
+        function exitGame() {
+            gameActive = false;
+            clearTimeout(gameTimer);
+            score = 0;
+            intervalTime = 2000;
+            document.getElementById('gameTitle').style.display = 'none';
+            document.getElementById('colorText').style.display = 'none';
+            document.querySelectorAll('.colorButton').forEach(btn => btn.style.display = 'none');
+            document.getElementById('score').style.display = 'none';
+            document.getElementById('exitButton').style.display = 'none';
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('playAgainButton').style.display = 'none';
+            document.getElementById('namePrompt').style.display = 'block';
+            document.getElementById('userName').value = ''; // Clear input field
+            document.getElementById('score').textContent = `Score: 0`;
+            backgroundMusic.muted = true; // Mute until next interaction
+            backgroundMusic.play().catch(() => {}); // Attempt to play (muted)
+        }
+
         function restartGame() {
             // Reset game state
             score = 0;
             intervalTime = 2000;
             gameActive = false;
+            document.getElementById('gameTitle').style.display = 'none';
             document.getElementById('score').textContent = `Score: 0`;
             document.getElementById('gameOver').style.display = 'none';
             document.getElementById('playAgainButton').style.display = 'none';
