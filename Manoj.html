@@ -177,8 +177,7 @@
 </head>
 <body>
     <audio id="backgroundMusic" loop muted>
-        <!-- Replace with a local file like 'background_music.mp3' -->
-        <source src="https://www.bensound.com/bensound-music/bensound-sunny.mp3" type="audio/mpeg">
+        <source src="./background.mp3" type="audio/mpeg">
         Your browser does not support the audio element.
     </audio>
     <button id="soundControl" onclick="toggleSound()">Sound: On</button>
@@ -188,7 +187,7 @@
             <div id="instructions">
                 Welcome to the Color Click Game!<br>
                 A color name will appear in a colored font.<br>
-                Click the button that matches the <strong>font color</strong> (not the color name).<br>
+                Click the button labeled with the <strong>color name shown</strong> (ignore the font color).<br>
                 Correct clicks increase score and speed, wrong clicks slow the game.<br>
                 You have 1 minute to score as high as possible!
             </div>
@@ -221,4 +220,96 @@
         let gameActive = false;
         let intervalTime = 2000; // Start with 2 seconds
         const minInterval = 333; // Max frequency: 3 colors/sec (1000/3 ≈ 333ms)
-        const max
+        const maxInterval = 3000; // Max interval: 3 seconds
+        let gameTimer;
+        let userName = '';
+        const backgroundMusic = document.getElementById('backgroundMusic');
+        const soundControl = document.getElementById('soundControl');
+        let isSoundOn = true;
+
+        // Start music on page load (muted initially)
+        backgroundMusic.play().catch(() => {
+            // Autoplay blocked, will unmute on interaction
+        });
+
+        function toggleSound() {
+            isSoundOn = !isSoundOn;
+            backgroundMusic.muted = !isSoundOn;
+            soundControl.textContent = `Sound: ${isSoundOn ? 'On' : 'Off'}`;
+        }
+
+        function getRandomColor(array) {
+            return array[Math.floor(Math.random() * array.length)];
+        }
+
+        function updateColor() {
+            if (!gameActive) return;
+            const selectedColor = getRandomColor(colors);
+            currentColor = selectedColor.name;
+            const availableFontColors = colors.filter(c => c.name !== currentColor);
+            const fontColorObj = getRandomColor(availableFontColors);
+            currentFontColor = fontColorObj.name;
+            document.getElementById('colorText').textContent = currentColor;
+            document.getElementById('colorText').style.color = fontColorObj.value; // Use dark yellow for font
+        }
+
+        function checkColor(selectedColor) {
+            if (!gameActive) return;
+            if (selectedColor === currentColor) { // Success: clicked button label matches displayed color name
+                score++;
+                intervalTime = Math.max(minInterval, intervalTime * 0.9); // Increase frequency (10% faster)
+                document.getElementById('score').textContent = `Score: ${score}`;
+            } else {
+                intervalTime = Math.min(maxInterval, intervalTime * 1.1); // Decrease frequency (10% slower)
+            }
+            updateColor(); // Change color only after a click
+        }
+
+        function startGame() {
+            userName = document.getElementById('userName').value.trim() || 'Player';
+            document.getElementById('namePrompt').style.display = 'none';
+            document.getElementById('colorText').style.display = 'block';
+            document.querySelectorAll('.colorButton').forEach(btn => btn.style.display = 'inline-block');
+            document.getElementById('score').style.display = 'block';
+            gameActive = true;
+
+            // Unmute music on first interaction
+            if (backgroundMusic.muted) {
+                backgroundMusic.muted = false;
+                backgroundMusic.play();
+            }
+
+            gameTimer = setTimeout(endGame, 60000); // 1 minute
+            updateColor(); // Show first color
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearTimeout(gameTimer);
+            document.getElementById('colorText').style.display = 'none';
+            document.querySelectorAll('.colorButton').forEach(btn => btn.style.display = 'none');
+            document.getElementById('score').style.display = 'none';
+            const gameOverDiv = document.getElementById('gameOver');
+            gameOverDiv.textContent = `🎉 Congratulations, ${userName}! You scored ${score} points! Amazing job! 🎉`;
+            gameOverDiv.style.display = 'block';
+            document.getElementById('playAgainButton').style.display = 'block';
+            backgroundMusic.pause(); // Stop music at game end
+            backgroundMusic.currentTime = 0; // Reset to start
+        }
+
+        function restartGame() {
+            // Reset game state
+            score = 0;
+            intervalTime = 2000;
+            gameActive = false;
+            document.getElementById('score').textContent = `Score: 0`;
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('playAgainButton').style.display = 'none';
+            document.getElementById('namePrompt').style.display = 'block';
+            document.getElementById('userName').value = ''; // Clear input field
+            backgroundMusic.muted = true; // Mute until next interaction
+            backgroundMusic.play().catch(() => {}); // Attempt to play (muted)
+        }
+    </script>
+</body>
+</html>
