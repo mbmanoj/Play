@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Click Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Roboto:wght@300&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #a1c4fd, #c2e9fb);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+            max-width: 600px;
+            width: 90%;
+            transition: transform 0.3s;
+        }
+        .container:hover {
+            transform: scale(1.02);
+        }
+        #namePrompt {
+            margin-bottom: 20px;
+        }
+        #welcomeTitle {
+            font-family: 'Poppins', sans-serif;
+            font-size: 2.5em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            animation: fadeIn 1s ease-in-out;
+        }
+        #instructions {
+            font-family: 'Roboto', sans-serif;
+            font-size: 1.2em;
+            color: #34495e;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            animation: slideIn 1s ease-in-out;
+        }
+        #userName {
+            padding: 12px;
+            font-size: 1.1em;
+            border: 2px solid #74ebd5;
+            border-radius: 10px;
+            width: 220px;
+            outline: none;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            font-family: 'Roboto', sans-serif;
+        }
+        #userName:focus {
+            border-color: #2c3e50;
+            box-shadow: 0 0 8px rgba(44, 62, 80, 0.3);
+        }
+        #startButton {
+            padding: 12px;
+            font-size: 1.1em;
+            width: 220px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #74ebd5, #acb6e5);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            margin-top: 15px;
+            transition: background 0.3s, transform 0.2s;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+        }
+        #startButton:hover {
+            background: linear-gradient(135deg, #67d3c2, #98a2d7);
+            transform: scale(1.05);
+        }
+        #colorText {
+            font-size: 2.5em;
+            margin: 20px 0;
+            font-weight: bold;
+            color: #333;
+            display: none;
+            text-transform: uppercase;
+            font-family: 'Poppins', sans-serif;
+        }
+        .colorButton {
+            padding: 15px 30px;
+            margin: 8px;
+            font-size: 1.2em;
+            cursor: pointer;
+            border: none;
+            color: white;
+            border-radius: 10px;
+            display: none;
+            transition: transform 0.2s;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+        }
+        .colorButton:hover {
+            transform: scale(1.1);
+        }
+        #score {
+            font-size: 1.5em;
+            margin-top: 20px;
+            color: #34495e;
+            display: none;
+            font-family: 'Roboto', sans-serif;
+        }
+        #gameOver {
+            font-size: 2em;
+            color: #d4a017;
+            display: none;
+            font-weight: bold;
+            margin-top: 20px;
+            animation: popIn 0.5s ease-in-out;
+            font-family: 'Poppins', sans-serif;
+        }
+        #playAgainButton {
+            padding: 12px;
+            font-size: 1.1em;
+            width: 220px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #74ebd5, #acb6e5);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            margin-top: 20px;
+            transition: background 0.3s, transform 0.2s;
+            display: none;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+        }
+        #playAgainButton:hover {
+            background: linear-gradient(135deg, #67d3c2, #98a2d7);
+            transform: scale(1.05);
+        }
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(-20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideIn {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="namePrompt">
+            <div id="welcomeTitle">Color Click Challenge</div>
+            <div id="instructions">
+                Welcome to the Color Click Game!<br>
+                A color name will appear in a colored font.<br>
+                Click the button that matches the <strong>font color</strong> (not the color name).<br>
+                Correct clicks increase score and speed, wrong clicks slow the game.<br>
+                You have 1 minute to score as high as possible!
+            </div>
+            <label for="userName">Enter your name:</label><br>
+            <input type="text" id="userName" placeholder="Your name">
+            <button id="startButton" onclick="startGame()">Start Game</button>
+        </div>
+        <div id="colorText"></div>
+        <div>
+            <button class="colorButton" style="background-color: red;" onclick="checkColor('red')">Red</button>
+            <button class="colorButton" style="background-color: blue;" onclick="checkColor('blue')">Blue</button>
+            <button class="colorButton" style="background-color: green;" onclick="checkColor('green')">Green</button>
+            <button class="colorButton" style="background-color: #c7a008;" onclick="checkColor('yellow')">Yellow</button>
+        </div>
+        <div id="score">Score: 0</div>
+        <div id="gameOver"></div>
+        <button id="playAgainButton" onclick="restartGame()">Play Again</button>
+    </div>
+
+    <script>
+        const colors = [
+            { name: 'red', value: 'red' },
+            { name: 'blue', value: 'blue' },
+            { name: 'green', value: 'green' },
+            { name: 'yellow', value: '#c7a008' } // Dark yellow for both button and font
+        ];
+        let score = 0;
+        let currentColor = '';
+        let currentFontColor = '';
+        let gameActive = false;
+        let intervalTime = 2000; // Start with 2 seconds
+        const minInterval = 333; // Max frequency: 3 colors/sec (1000/3 ≈ 333ms)
+        const maxInterval = 3000; // Max interval: 3 seconds
+        let gameTimer;
+        let userName = '';
+
+        function getRandomColor(array) {
+            return array[Math.floor(Math.random() * array.length)];
+        }
+
+        function updateColor() {
+            if (!gameActive) return;
+            const selectedColor = getRandomColor(colors);
+            currentColor = selectedColor.name;
+            const availableFontColors = colors.filter(c => c.name !== currentColor);
+            const fontColorObj = getRandomColor(availableFontColors);
+            currentFontColor = fontColorObj.name;
+            document.getElementById('colorText').textContent = currentColor;
+            document.getElementById('colorText').style.color = fontColorObj.value; // Use dark yellow for font
+        }
+
+        function checkColor(selectedColor) {
+            if (!gameActive) return;
+            if (selectedColor === currentFontColor) { // Success: clicked button matches font color
+                score++;
+                intervalTime = Math.max(minInterval, intervalTime * 0.9); // Increase frequency (10% faster)
+                document.getElementById('score').textContent = `Score: ${score}`;
+            } else {
+                intervalTime = Math.min(maxInterval, intervalTime * 1.1); // Decrease frequency (10% slower)
+            }
+            updateColor(); // Change color only after a click
+        }
+
+        function startGame() {
+            userName = document.getElementById('userName').value.trim() || 'Player';
+            document.getElementById('namePrompt').style.display = 'none';
+            document.getElementById('colorText').style.display = 'block';
+            document.querySelectorAll('.colorButton').forEach(btn => btn.style.display = 'inline-block');
+            document.getElementById('score').style.display = 'block';
+            gameActive = true;
+
+            gameTimer = setTimeout(endGame, 60000); // 1 minute
+            updateColor(); // Show first color
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearTimeout(gameTimer);
+            document.getElementById('colorText').style.display = 'none';
+            document.querySelectorAll('.colorButton').forEach(btn => btn.style.display = 'none');
+            document.getElementById('score').style.display = 'none';
+            const gameOverDiv = document.getElementById('gameOver');
+            gameOverDiv.textContent = `🎉 Congratulations, ${userName}! You scored ${score} points! Amazing job! 🎉`;
+            gameOverDiv.style.display = 'block';
+            document.getElementById('playAgainButton').style.display = 'block';
+        }
+
+        function restartGame() {
+            // Reset game state
+            score = 0;
+            intervalTime = 2000;
+            gameActive = false;
+            document.getElementById('score').textContent = `Score: 0`;
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('playAgainButton').style.display = 'none';
+            document.getElementById('namePrompt').style.display = 'block';
+            document.getElementById('userName').value = ''; // Clear input field
+        }
+    </script>
+</body>
+</html>
