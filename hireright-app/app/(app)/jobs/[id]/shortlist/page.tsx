@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { read } from "@/lib/db";
+import { getRepo } from "@/lib/db/repo";
 import { requireSession } from "@/lib/auth";
 
 function confBadge(c: string) {
   return c === "high" ? "green" : c === "medium" ? "amber" : "red";
 }
 
-export default function Shortlist({ params }: { params: { id: string } }) {
-  requireSession();
-  const db = read();
+export default async function Shortlist({ params }: { params: { id: string } }) {
+  await requireSession();
+  const db = await getRepo().snapshot();
   const job = db.jobs.find((j) => j.id === params.id);
   if (!job) notFound();
   const ranking = [...db.rankings].reverse().find((r) => r.jobId === job.id);

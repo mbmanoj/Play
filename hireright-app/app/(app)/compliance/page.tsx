@@ -1,10 +1,10 @@
-import { read } from "@/lib/db";
+import { getRepo } from "@/lib/db/repo";
 import { requireSession } from "@/lib/auth";
 import { adverseImpact } from "@/lib/compliance";
 
-export default function Compliance() {
-  const user = requireSession();
-  const db = read();
+export default async function Compliance() {
+  const user = await requireSession();
+  const db = await getRepo().snapshot();
   const candidates = db.candidates.filter((c) => c.clientId === user.clientId);
   const audit = [...db.audit].reverse();
 

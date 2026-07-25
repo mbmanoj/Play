@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { login } from "@/app/actions";
 
-export default function LoginPage() {
-  if (getSession()) redirect("/dashboard");
+export default async function LoginPage() {
+  if (await getSession()) redirect("/dashboard");
   return (
     <div className="login-wrap">
       <div className="login-card">

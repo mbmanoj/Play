@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { read, write, resetDB } from "@/lib/db";
+import { getRepo } from "@/lib/db/repo";
 import { setSession, clearSession, requireSession } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { getAI, ACTIVE_PROVIDER } from "@/lib/ai";
@@ -12,8 +12,8 @@ import { Job } from "@/lib/types";
 
 // ── Auth ──────────────────────────────────────────────────────────────
 export async function login() {
-  const user = read().users[0];
-  setSession(user.id);
+  const db = await getRepo().snapshot();
+  setSession(db.users[0].id);
   redirect("/dashboard");
 }
 
@@ -24,7 +24,7 @@ export async function logout() {
 
 // ── Create job (M2: JD upload) ────────────────────────────────────────
 export async function createJob(formData: FormData) {
-  const user = requireSession();
+  const user = await requireSession();
   const title = String(formData.get("title") || "Untitled role").trim();
   const jdText = String(formData.get("jdText") || "").trim();
 
@@ -37,8 +37,8 @@ export async function createJob(formData: FormData) {
     createdAt: nowISO(),
     createdBy: user.id
   };
-  write((db) => db.jobs.push(job));
-  logAudit({
+  await getRepo().createJob(job);
+  await logAudit({
     actorType: "client_user",
     actorId: user.id,
     action: "job.created",
@@ -53,17 +53,17 @@ export async function createJob(formData: FormData) {
 
 // ── Generate plan (M2) ────────────────────────────────────────────────
 export async function generatePlan(jobId: string) {
-  const job = read().jobs.find((j) => j.id === jobId);
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const job = db.jobs.find((j) => j.id === jobId);
   if (!job) throw new Error("Job not found");
 
   const plan = await getAI().generatePlan(job);
-  write((db) => {
-    db.plans.filter((p) => p.jobId === jobId).forEach((p) => (p.status = "superseded"));
-    db.plans.push(plan);
-    const j = db.jobs.find((x) => x.id === jobId)!;
-    j.stage = "PLAN_GENERATED";
-  });
-  logAudit({
+  await repo.supersedePlans(jobId);
+  await repo.addPlan(plan);
+  await repo.setJobStage(jobId, "PLAN_GENERATED");
+
+  await logAudit({
     actorType: "ai",
     actorId: `${ACTIVE_PROVIDER()}-planner`,
     action: "plan.generated",
@@ -76,29 +76,32 @@ export async function generatePlan(jobId: string) {
 
 // ── Edit plan (M2) ────────────────────────────────────────────────────
 export async function updatePlan(formData: FormData) {
-  const user = requireSession();
+  const user = await requireSession();
   const planId = String(formData.get("planId"));
   const cutoffValue = Number(formData.get("cutoffValue") || 5);
 
-  write((db) => {
-    const plan = db.plans.find((p) => p.planId === planId);
-    if (!plan || plan.status !== "draft") return;
-    plan.cutoffValue = cutoffValue;
-    plan.criteria.forEach((c) => {
-      const w = formData.get(`weight_${c.id}`);
-      const ko = formData.get(`knockout_${c.id}`);
-      if (w !== null) c.weight = Math.max(0, Math.min(1, Number(w)));
-      c.isKnockout = ko === "on";
-    });
-    plan.interviewBlueprint.forEach((q) => {
-      const t = formData.get(`q_${q.id}`);
-      if (t !== null && String(t) !== q.text) {
-        q.text = String(t);
-        q.editedByClient = true;
-      }
-    });
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const plan = db.plans.find((p) => p.planId === planId);
+  if (!plan || plan.status !== "draft") return;
+
+  plan.cutoffValue = cutoffValue;
+  plan.criteria.forEach((c) => {
+    const w = formData.get(`weight_${c.id}`);
+    const ko = formData.get(`knockout_${c.id}`);
+    if (w !== null) c.weight = Math.max(0, Math.min(1, Number(w)));
+    c.isKnockout = ko === "on";
   });
-  logAudit({
+  plan.interviewBlueprint.forEach((q) => {
+    const t = formData.get(`q_${q.id}`);
+    if (t !== null && String(t) !== q.text) {
+      q.text = String(t);
+      q.editedByClient = true;
+    }
+  });
+  await repo.savePlan(plan);
+
+  await logAudit({
     actorType: "client_user",
     actorId: user.id,
     action: "plan.edited",
@@ -106,27 +109,26 @@ export async function updatePlan(formData: FormData) {
     entityId: planId,
     rationale: "Client edited criteria weights / interview questions."
   });
-  const jobId = read().plans.find((p) => p.planId === planId)?.jobId;
-  if (jobId) revalidatePath(`/jobs/${jobId}`);
+  revalidatePath(`/jobs/${plan.jobId}`);
 }
 
 // ── Approve plan (GATE 1) ─────────────────────────────────────────────
 export async function approvePlan(formData: FormData) {
-  const user = requireSession();
+  const user = await requireSession();
   const planId = String(formData.get("planId"));
-  let jobId = "";
 
-  write((db) => {
-    const plan = db.plans.find((p) => p.planId === planId);
-    if (!plan) return;
-    plan.status = "approved";
-    plan.approvedBy = user.id;
-    plan.approvedAt = nowISO();
-    jobId = plan.jobId;
-    const job = db.jobs.find((j) => j.id === jobId)!;
-    job.stage = "PLAN_APPROVED";
-  });
-  logAudit({
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const plan = db.plans.find((p) => p.planId === planId);
+  if (!plan) return;
+
+  plan.status = "approved";
+  plan.approvedBy = user.id;
+  plan.approvedAt = nowISO();
+  await repo.savePlan(plan);
+  await repo.setJobStage(plan.jobId, "PLAN_APPROVED");
+
+  await logAudit({
     actorType: "client_user",
     actorId: user.id,
     action: "gate.plan_approved",
@@ -134,35 +136,33 @@ export async function approvePlan(formData: FormData) {
     entityId: planId,
     rationale: "APPROVAL GATE 1: plan locked (immutable). Screening unlocked."
   });
-  if (jobId) {
-    revalidatePath(`/jobs/${jobId}`);
-    redirect(`/jobs/${jobId}`);
-  }
+  revalidatePath(`/jobs/${plan.jobId}`);
+  redirect(`/jobs/${plan.jobId}`);
 }
 
 // ── Run screening (M3) ────────────────────────────────────────────────
 export async function runScreening(jobId: string) {
-  const db0 = read();
-  const job = db0.jobs.find((j) => j.id === jobId);
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const job = db.jobs.find((j) => j.id === jobId);
   if (!job || job.stage !== "PLAN_APPROVED") throw new Error("Plan not approved");
-  const plan = db0.plans.find((p) => p.jobId === jobId && p.status === "approved");
+  const plan = db.plans.find((p) => p.jobId === jobId && p.status === "approved");
   if (!plan) throw new Error("No approved plan");
 
-  const pool = db0.candidates.filter((c) => c.clientId === job.clientId);
+  const pool = db.candidates.filter((c) => c.clientId === job.clientId);
   const rankedCandidates = await getAI().rankCandidates(plan, pool);
 
   const runId = uid("run");
-  write((db) => {
-    db.rankings.push({
-      runId,
-      jobId,
-      planVersion: plan.version,
-      candidates: rankedCandidates,
-      createdAt: nowISO()
-    });
-    db.jobs.find((j) => j.id === jobId)!.stage = "SCREEN_COMPLETE";
+  await repo.addRanking({
+    runId,
+    jobId,
+    planVersion: plan.version,
+    candidates: rankedCandidates,
+    createdAt: nowISO()
   });
-  logAudit({
+  await repo.setJobStage(jobId, "SCREEN_COMPLETE");
+
+  await logAudit({
     actorType: "ai",
     actorId: `${ACTIVE_PROVIDER()}-ranker`,
     action: "candidates.scored",
@@ -176,7 +176,8 @@ export async function runScreening(jobId: string) {
 
 // ── Folder ingestion (M1) ─────────────────────────────────────────────
 export async function ingestFolder(formData: FormData) {
-  const user = requireSession();
+  const user = await requireSession();
+  const repo = getRepo();
   const files = formData.getAll("files") as File[];
   let count = 0;
 
@@ -184,21 +185,19 @@ export async function ingestFolder(formData: FormData) {
     if (!file || typeof file.arrayBuffer !== "function") continue;
     const buf = Buffer.from(await file.arrayBuffer());
     const text = await extractText(file.name, buf);
-    write((db) =>
-      db.candidates.push({
-        id: uid("cand"),
-        clientId: user.clientId,
-        name: guessName(file.name, text),
-        source: "folder:upload",
-        fileName: file.name,
-        resumeText: text,
-        skills: deriveSkills(text),
-        ingestedAt: nowISO()
-      })
-    );
+    await repo.addCandidate({
+      id: uid("cand"),
+      clientId: user.clientId,
+      name: guessName(file.name, text),
+      source: "folder:upload",
+      fileName: file.name,
+      resumeText: text,
+      skills: deriveSkills(text),
+      ingestedAt: nowISO()
+    });
     count++;
   }
-  logAudit({
+  await logAudit({
     actorType: "client_user",
     actorId: user.id,
     action: "candidates.ingested",
@@ -211,8 +210,8 @@ export async function ingestFolder(formData: FormData) {
 
 // ── Demo reset ────────────────────────────────────────────────────────
 export async function resetDemo() {
-  requireSession();
-  resetDB();
+  await requireSession();
+  await getRepo().reset();
   revalidatePath("/dashboard");
   redirect("/dashboard");
 }

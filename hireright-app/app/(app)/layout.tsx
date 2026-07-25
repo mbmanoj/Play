@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import Sidebar from "@/components/Sidebar";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = getSession();
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession();
   if (!session) redirect("/login");
   return (
     <div className="shell">

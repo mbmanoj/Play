@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { read } from "@/lib/db";
+import { getRepo } from "@/lib/db/repo";
 import { requireSession } from "@/lib/auth";
 import { stageLabel } from "@/lib/pipeline/state";
 import { resetDemo } from "@/app/actions";
@@ -12,9 +12,9 @@ const STAGE_BADGE: Record<string, string> = {
   SCREEN_COMPLETE: "green"
 };
 
-export default function Dashboard() {
-  const user = requireSession();
-  const db = read();
+export default async function Dashboard() {
+  const user = await requireSession();
+  const db = await getRepo().snapshot();
   const jobs = db.jobs.filter((j) => j.clientId === user.clientId);
   const candidates = db.candidates.filter((c) => c.clientId === user.clientId);
   const shortlisted = db.rankings.length;

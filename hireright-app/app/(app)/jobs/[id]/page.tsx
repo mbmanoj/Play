@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { read } from "@/lib/db";
+import { getRepo } from "@/lib/db/repo";
 import { requireSession } from "@/lib/auth";
 import Stages from "@/components/Stages";
 import { updatePlan, approvePlan, runScreening } from "@/app/actions";
 
-export default function JobPage({ params }: { params: { id: string } }) {
-  requireSession();
-  const db = read();
+export default async function JobPage({ params }: { params: { id: string } }) {
+  await requireSession();
+  const db = await getRepo().snapshot();
   const job = db.jobs.find((j) => j.id === params.id);
   if (!job) notFound();
   const plan = db.plans.find((p) => p.jobId === job.id && p.status !== "superseded");

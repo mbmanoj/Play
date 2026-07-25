@@ -1,10 +1,11 @@
-import { read } from "@/lib/db";
+import { getRepo } from "@/lib/db/repo";
 import { requireSession } from "@/lib/auth";
 import FolderUpload from "@/components/FolderUpload";
 
-export default function Candidates() {
-  const user = requireSession();
-  const candidates = read().candidates.filter((c) => c.clientId === user.clientId);
+export default async function Candidates() {
+  const user = await requireSession();
+  const db = await getRepo().snapshot();
+  const candidates = db.candidates.filter((c) => c.clientId === user.clientId);
 
   return (
     <>

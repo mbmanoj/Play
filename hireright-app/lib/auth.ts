@@ -1,15 +1,15 @@
 import { cookies } from "next/headers";
-import { read } from "./db";
+import { getRepo } from "./db/repo";
 import { ClientUser } from "./types";
 
 // ── Mock auth (M0) ────────────────────────────────────────────────────
 // A simple cookie-based session for the demo. Real SSO/auth slots in here.
 const COOKIE = "hr_session";
 
-export function getSession(): ClientUser | null {
+export async function getSession(): Promise<ClientUser | null> {
   const id = cookies().get(COOKIE)?.value;
   if (!id) return null;
-  return read().users.find((u) => u.id === id) || null;
+  return getRepo().userById(id);
 }
 
 export function setSession(userId: string) {
@@ -20,8 +20,8 @@ export function clearSession() {
   cookies().delete(COOKIE);
 }
 
-export function requireSession(): ClientUser {
-  const s = getSession();
+export async function requireSession(): Promise<ClientUser> {
+  const s = await getSession();
   if (!s) throw new Error("Not authenticated");
   return s;
 }
