@@ -1,4 +1,11 @@
-import { Job, ClosurePlan, Candidate, RankedCandidate } from "../types";
+import {
+  Job,
+  ClosurePlan,
+  Candidate,
+  RankedCandidate,
+  TranscriptTurn,
+  CompetencyScore
+} from "../types";
 import * as mock from "./mock";
 import * as anthropic from "./anthropic";
 
@@ -7,9 +14,19 @@ import * as anthropic from "./anthropic";
 // ANTHROPIC_API_KEY in .env.local) to use real Claude calls; the mock
 // remains an automatic per-call fallback inside the anthropic adapter.
 
+export interface ScoreResult {
+  competencyScores: CompetencyScore[];
+  overallScore: number;
+  recommendation: { value: "advance" | "hold" | "pass"; rationale: string; isFinal: false };
+}
+
 export interface AIProvider {
   generatePlan(job: Job): Promise<ClosurePlan>;
   rankCandidates(plan: ClosurePlan, candidates: Candidate[]): Promise<RankedCandidate[]>;
+  // M5: conduct an async (email-style) first-round interview → transcript.
+  conductInterview(plan: ClosurePlan, candidate: Candidate): Promise<TranscriptTurn[]>;
+  // M6: score a completed interview transcript against the plan.
+  scoreInterview(plan: ClosurePlan, transcript: TranscriptTurn[]): Promise<ScoreResult>;
 }
 
 export const AI_PROVIDER = process.env.AI_PROVIDER || "mock";
@@ -24,8 +41,7 @@ function useAnthropic(): boolean {
 }
 
 export function getAI(): AIProvider {
-  return useAnthropic() ? anthropic : mock;
+  return useAnthropic() ? (anthropic as AIProvider) : (mock as AIProvider);
 }
 
-// The active provider label for display in the UI (Integrations page).
 export const ACTIVE_PROVIDER = (): "anthropic" | "mock" => (useAnthropic() ? "anthropic" : "mock");

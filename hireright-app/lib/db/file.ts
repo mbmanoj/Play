@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { DB, ClientUser, Job, JobStage, ClosurePlan, RankingResult, Candidate, AuditEvent } from "../types";
+import { DB, ClientUser, Job, JobStage, ClosurePlan, RankingResult, Candidate, AuditEvent, Interview, Scorecard, ClientAction, OutboxMessage } from "../types";
 import { seedDB } from "../seed";
 import { Repo } from "./repo";
 
@@ -90,6 +90,30 @@ export class FileRepo implements Repo {
 
   async appendAudit(e: AuditEvent): Promise<void> {
     this.mutate((db) => db.audit.push(e));
+  }
+
+  async addInterview(i: Interview): Promise<void> {
+    this.mutate((db) => db.interviews.push(i));
+  }
+
+  async saveInterview(i: Interview): Promise<void> {
+    this.mutate((db) => {
+      const k = db.interviews.findIndex((x) => x.id === i.id);
+      if (k >= 0) db.interviews[k] = i;
+      else db.interviews.push(i);
+    });
+  }
+
+  async addScorecard(s: Scorecard): Promise<void> {
+    this.mutate((db) => db.scorecards.push(s));
+  }
+
+  async addAction(a: ClientAction): Promise<void> {
+    this.mutate((db) => db.actions.push(a));
+  }
+
+  async addOutbox(m: OutboxMessage): Promise<void> {
+    this.mutate((db) => db.outbox.push(m));
   }
 
   async reset(): Promise<void> {

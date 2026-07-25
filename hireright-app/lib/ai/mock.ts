@@ -5,7 +5,9 @@ import {
   RankedCandidate,
   Criterion,
   CriterionScore,
-  BlueprintQuestion
+  BlueprintQuestion,
+  TranscriptTurn,
+  CompetencyScore
 } from "../types";
 import { uid, nowISO } from "../ids";
 
@@ -154,6 +156,77 @@ export async function rankCandidates(
   });
   ranked.forEach((r, i) => (r.rank = i + 1));
   return ranked;
+}
+
+// ── Interview (M5) ────────────────────────────────────────────────────
+export async function conductInterview(
+  plan: ClosurePlan,
+  candidate: Candidate
+): Promise<TranscriptTurn[]> {
+  return plan.interviewBlueprint.map((q) => {
+    const crit = plan.criteria.find((c) => c.id === q.competencyId);
+    const kws = crit?.keywords || [];
+    const sentence = findSentence(candidate.resumeText, kws);
+    const answer = sentence
+      ? `Yes — this was central to my recent work. ${sentence} I owned it end-to-end and can speak to the measurable impact and trade-offs involved.`
+      : `I have some exposure here and I'm keen to grow it, though it wasn't a core part of my most recent role. I'd approach it by starting from fundamentals and pairing with the team.`;
+    return { questionId: q.id, question: q.text, answer };
+  });
+}
+
+// ── Interview scoring (M6) ────────────────────────────────────────────
+export async function scoreInterview(
+  plan: ClosurePlan,
+  transcript: TranscriptTurn[]
+): Promise<{
+  competencyScores: CompetencyScore[];
+  overallScore: number;
+  recommendation: { value: "advance" | "hold" | "pass"; rationale: string; isFinal: false };
+}> {
+  const byQ = new Map(plan.interviewBlueprint.map((q) => [q.id, q]));
+  const competencyScores: CompetencyScore[] = transcript.map((t) => {
+    const q = byQ.get(t.questionId);
+    const crit = plan.criteria.find((c) => c.id === q?.competencyId);
+    const kws = crit?.keywords || [];
+    const hit = findSentence(t.answer, kws);
+    const score = hit ? 88 : 45;
+    return {
+      competencyId: crit?.id || t.questionId,
+      label: crit?.label || q?.text || "Competency",
+      score,
+      evidence: hit || t.answer.slice(0, 140)
+    };
+  });
+
+  // weight by criterion weight where available, else equal
+  let weighted = 0;
+  let wsum = 0;
+  for (const cs of competencyScores) {
+    const w = plan.criteria.find((c) => c.id === cs.competencyId)?.weight ?? 1 / competencyScores.length;
+    weighted += (cs.score / 100) * w;
+    wsum += w;
+  }
+  const overallScore = Math.round((wsum ? weighted / wsum : 0) * 100);
+  const value = overallScore >= 70 ? "advance" : overallScore >= 50 ? "hold" : "pass";
+  return {
+    competencyScores,
+    overallScore,
+    recommendation: {
+      value,
+      rationale: `Interview scored ${overallScore}/100 across ${competencyScores.length} competencies. This is a recommendation pending client approval — the AI never decides.`,
+      isFinal: false
+    }
+  };
+}
+
+function findSentence(text: string, keywords: string[]): string | null {
+  const sentences = text.split(/(?<=[.\n])/).map((s) => s.trim()).filter(Boolean);
+  for (const kw of keywords) {
+    const k = kw.toLowerCase();
+    const hit = sentences.find((s) => s.toLowerCase().includes(k));
+    if (hit) return hit;
+  }
+  return null;
 }
 
 // ── helpers ───────────────────────────────────────────────────────────

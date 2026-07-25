@@ -124,6 +124,10 @@ export function seedDB(): DB {
     plans: [],
     candidates: CANDIDATES,
     rankings: [],
+    interviews: [],
+    scorecards: [],
+    actions: [],
+    outbox: [],
     audit: [
       {
         eventId: "evt_seed",

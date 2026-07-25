@@ -117,6 +117,70 @@ export interface RankingResult {
   createdAt: string;
 }
 
+// ── Interviews (M4 outreach → M5 interview) ───────────────────────────
+export type InterviewStatus = "invited" | "completed";
+
+export interface TranscriptTurn {
+  questionId: string;
+  question: string;
+  answer: string;
+}
+
+export interface Interview {
+  id: string;
+  clientId: string;
+  jobId: string;
+  candidateId: string;
+  status: InterviewStatus;
+  channel: "email";
+  transcript: TranscriptTurn[];
+  createdAt: string;
+  completedAt: string | null;
+}
+
+// ── Scorecard (M6) ────────────────────────────────────────────────────
+export interface CompetencyScore {
+  competencyId: string;
+  label: string;
+  score: number; // 0..100
+  evidence: string; // VERBATIM quote from the candidate's answer
+}
+
+export interface Scorecard {
+  id: string;
+  interviewId: string;
+  candidateId: string;
+  jobId: string;
+  competencyScores: CompetencyScore[];
+  overallScore: number;
+  recommendation: { value: "advance" | "hold" | "pass"; rationale: string; isFinal: false };
+  createdAt: string;
+}
+
+// ── Client actions (M7) + mocked outbox (M4/M7) ───────────────────────
+export type ActionType = "send_email" | "schedule_meeting";
+
+export interface ClientAction {
+  id: string;
+  clientId: string;
+  jobId: string;
+  candidateId: string;
+  type: ActionType;
+  detail: string;
+  triggeredBy: string; // client_user id — NEVER the AI
+  triggeredAt: string;
+}
+
+export interface OutboxMessage {
+  id: string;
+  clientId: string;
+  to: string;
+  subject: string;
+  body: string;
+  kind: "invite" | "action";
+  createdAt: string;
+}
+
 // ── Compliance audit log (M-Compliance) ───────────────────────────────
 export interface AuditEvent {
   eventId: string;
@@ -137,5 +201,9 @@ export interface DB {
   plans: ClosurePlan[];
   candidates: Candidate[];
   rankings: RankingResult[];
+  interviews: Interview[];
+  scorecards: Scorecard[];
+  actions: ClientAction[];
+  outbox: OutboxMessage[];
   audit: AuditEvent[];
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getRepo } from "@/lib/db/repo";
 import { requireSession } from "@/lib/auth";
+import { advanceCandidate } from "@/app/actions";
 
 function confBadge(c: string) {
   return c === "high" ? "green" : c === "medium" ? "amber" : "red";
@@ -36,12 +37,14 @@ export default async function Shortlist({ params }: { params: { id: string } }) 
       </div>
 
       <div className="info" style={{ marginBottom: "1.5rem" }}>
-        Top {cutoff} shown as the recommended shortlist. Every score cites verbatim resume evidence
-        (&ldquo;the receipts&rdquo;). Knockout failures are <strong>flagged, not auto-rejected</strong> — you decide.
+        Top {cutoff} shown as the recommended shortlist. Every score cites verbatim resume evidence.
+        Advancing a candidate (Gate 2) queues an interview invite and opens their interview.
       </div>
 
       {ranking.candidates.map((c) => {
         const recommended = c.rank <= cutoff && c.knockoutFailures.length === 0;
+        const interview = db.interviews.find((i) => i.jobId === job.id && i.candidateId === c.candidateId);
+        const scorecard = db.scorecards.find((s) => s.jobId === job.id && s.candidateId === c.candidateId);
         return (
           <div className="card" key={c.candidateId} style={recommended ? { borderColor: "#a5b4fc" } : {}}>
             <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -54,14 +57,28 @@ export default async function Shortlist({ params }: { params: { id: string } }) 
                     <span className={`badge ${confBadge(c.confidence)}`}>{c.confidence} confidence</span>
                     {recommended && <span className="badge green">Recommended</span>}
                     {c.knockoutFailures.length > 0 && <span className="badge red">Knockout: {c.knockoutFailures.length}</span>}
+                    {interview && <span className="badge blue">{interview.status === "completed" ? "Interviewed" : "Invited"}</span>}
+                    {scorecard && <span className="badge amber">Rec: {scorecard.recommendation.value}</span>}
                   </div>
                 </div>
               </div>
+              <div className="row" style={{ gap: ".5rem" }}>
+                {interview ? (
+                  <Link className="btn secondary" href={`/jobs/${job.id}/candidate/${c.candidateId}`}>Open →</Link>
+                ) : (
+                  <>
+                    <Link className="btn ghost" href={`/jobs/${job.id}/candidate/${c.candidateId}`}>Details</Link>
+                    <form action={advanceCandidate.bind(null, job.id, c.candidateId)}>
+                      <button className="btn green">Advance to interview</button>
+                    </form>
+                  </>
+                )}
+              </div>
             </div>
 
-            <p className="small" style={{ margin: ".75rem 0" }}>{c.summary}</p>
+            <p className="small" style={{ margin: ".75rem 0 0" }}>{c.summary}</p>
 
-            <details>
+            <details style={{ marginTop: ".5rem" }}>
               <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: ".85rem", color: "var(--accent)" }}>
                 Show evidence ({c.criterionScores.length} criteria)
               </summary>

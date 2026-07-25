@@ -6,7 +6,11 @@ import {
   ClosurePlan,
   RankingResult,
   Candidate,
-  AuditEvent
+  AuditEvent,
+  Interview,
+  Scorecard,
+  ClientAction,
+  OutboxMessage
 } from "../types";
 
 // ── Repository interface (async) ──────────────────────────────────────
@@ -30,6 +34,12 @@ export interface Repo {
   addRanking(r: RankingResult): Promise<void>;
   addCandidate(c: Candidate): Promise<void>;
   appendAudit(e: AuditEvent): Promise<void>;
+
+  addInterview(i: Interview): Promise<void>;
+  saveInterview(i: Interview): Promise<void>;
+  addScorecard(s: Scorecard): Promise<void>;
+  addAction(a: ClientAction): Promise<void>;
+  addOutbox(m: OutboxMessage): Promise<void>;
 
   reset(): Promise<void>;
 }

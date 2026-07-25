@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { getAI, ACTIVE_PROVIDER } from "@/lib/ai";
 import { uid, nowISO } from "@/lib/ids";
 import { extractText, deriveSkills, guessName } from "@/lib/ingestion/parse";
-import { Job } from "@/lib/types";
+import { Job, Interview, Scorecard, ClientAction, ActionType } from "@/lib/types";
 
 // ── Auth ──────────────────────────────────────────────────────────────
 export async function login() {
@@ -176,6 +176,158 @@ export async function runScreening(jobId: string) {
   });
   revalidatePath(`/jobs/${jobId}`);
   redirect(`/jobs/${jobId}/shortlist`);
+}
+
+// ── M4: advance candidate to interview (GATE 2) + outreach ────────────
+export async function advanceCandidate(jobId: string, candidateId: string) {
+  const user = await requireSession();
+  assertCanMutate(user);
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const cand = db.candidates.find((c) => c.id === candidateId);
+  const job = db.jobs.find((j) => j.id === jobId);
+  if (!cand || !job) throw new Error("Not found");
+
+  if (!db.interviews.some((i) => i.jobId === jobId && i.candidateId === candidateId)) {
+    const interview: Interview = {
+      id: uid("intv"),
+      clientId: user.clientId,
+      jobId,
+      candidateId,
+      status: "invited",
+      channel: "email",
+      transcript: [],
+      createdAt: nowISO(),
+      completedAt: null
+    };
+    await repo.addInterview(interview);
+    await repo.addOutbox({
+      id: uid("msg"),
+      clientId: user.clientId,
+      to: `${cand.name} <candidate@example.com>`,
+      subject: `Interview invite — ${job.title}`,
+      body: `Hi ${cand.name},\n\nYou've been shortlisted for ${job.title} at ${db.clients.find((c) => c.id === user.clientId)?.name}. We'd like to run a short first-round interview by email. Reply to begin — the interview is conducted by an AI assistant on the hiring team's behalf.`,
+      kind: "invite",
+      createdAt: nowISO()
+    });
+    await logAudit({
+      actorType: "client_user",
+      actorId: user.id,
+      action: "gate.advance_approved",
+      entityType: "candidate",
+      entityId: candidateId,
+      rationale: `APPROVAL GATE 2: ${cand.name} advanced to interview; invite queued to outbox.`
+    });
+  }
+  revalidatePath(`/jobs/${jobId}/candidate/${candidateId}`);
+  redirect(`/jobs/${jobId}/candidate/${candidateId}`);
+}
+
+// ── M5: conduct the async AI interview ────────────────────────────────
+export async function runInterview(interviewId: string) {
+  assertCanMutate(await requireSession());
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const intv = db.interviews.find((i) => i.id === interviewId);
+  if (!intv) throw new Error("Interview not found");
+  const plan = db.plans.find((p) => p.jobId === intv.jobId && p.status === "approved");
+  const cand = db.candidates.find((c) => c.id === intv.candidateId);
+  if (!plan || !cand) throw new Error("Missing plan/candidate");
+
+  const transcript = await getAI().conductInterview(plan, cand);
+  intv.transcript = transcript;
+  intv.status = "completed";
+  intv.completedAt = nowISO();
+  await repo.saveInterview(intv);
+
+  await logAudit({
+    actorType: "ai",
+    actorId: `${ACTIVE_PROVIDER()}-interviewer`,
+    action: "interview.completed",
+    entityType: "interview",
+    entityId: intv.id,
+    rationale: `Async ${intv.channel} first-round interview completed (${transcript.length} Q&A). AI use disclosed to candidate.`
+  });
+  revalidatePath(`/jobs/${intv.jobId}/candidate/${intv.candidateId}`);
+}
+
+// ── M6: score the completed interview ─────────────────────────────────
+export async function scoreInterviewAction(interviewId: string) {
+  assertCanMutate(await requireSession());
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const intv = db.interviews.find((i) => i.id === interviewId);
+  if (!intv || intv.status !== "completed") throw new Error("Interview not completed");
+  const plan = db.plans.find((p) => p.jobId === intv.jobId && p.status === "approved");
+  if (!plan) throw new Error("No approved plan");
+
+  const res = await getAI().scoreInterview(plan, intv.transcript);
+  const sc: Scorecard = {
+    id: uid("sc"),
+    interviewId: intv.id,
+    candidateId: intv.candidateId,
+    jobId: intv.jobId,
+    competencyScores: res.competencyScores,
+    overallScore: res.overallScore,
+    recommendation: res.recommendation,
+    createdAt: nowISO()
+  };
+  await repo.addScorecard(sc);
+
+  await logAudit({
+    actorType: "ai",
+    actorId: `${ACTIVE_PROVIDER()}-scorer`,
+    action: "interview.scored",
+    entityType: "scorecard",
+    entityId: sc.id,
+    rationale: `Scorecard: ${res.overallScore}/100; recommendation "${res.recommendation.value}" (RECOMMENDATION — pending client approval).`
+  });
+  revalidatePath(`/jobs/${intv.jobId}/candidate/${intv.candidateId}`);
+}
+
+// ── M7: client-initiated action (GATE 3) ──────────────────────────────
+export async function triggerAction(jobId: string, candidateId: string, type: ActionType) {
+  const user = await requireSession();
+  assertCanMutate(user);
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const cand = db.candidates.find((c) => c.id === candidateId);
+  const job = db.jobs.find((j) => j.id === jobId);
+  if (!cand || !job) throw new Error("Not found");
+
+  const detail = type === "send_email" ? `Email sent to ${cand.name}` : `Meeting scheduled with ${cand.name}`;
+  const action: ClientAction = {
+    id: uid("act"),
+    clientId: user.clientId,
+    jobId,
+    candidateId,
+    type,
+    detail,
+    triggeredBy: user.id, // NEVER the AI
+    triggeredAt: nowISO()
+  };
+  await repo.addAction(action);
+  await repo.addOutbox({
+    id: uid("msg"),
+    clientId: user.clientId,
+    to: `${cand.name} <candidate@example.com>`,
+    subject: type === "send_email" ? `Next steps — ${job.title}` : `Interview scheduled — ${job.title}`,
+    body:
+      type === "send_email"
+        ? `Hi ${cand.name},\n\nThanks for interviewing for ${job.title}. We'd like to move forward — a member of the team will follow up shortly.`
+        : `Hi ${cand.name},\n\nWe'd like to schedule your next interview for ${job.title}. Please pick a time from the link we'll send.`,
+    kind: "action",
+    createdAt: nowISO()
+  });
+  await logAudit({
+    actorType: "client_user",
+    actorId: user.id,
+    action: `action.${type}`,
+    entityType: "candidate",
+    entityId: candidateId,
+    rationale: `GATE 3 (client-initiated, never the AI): ${detail}.`
+  });
+  revalidatePath(`/jobs/${jobId}/candidate/${candidateId}`);
 }
 
 // ── Folder ingestion (M1) ─────────────────────────────────────────────

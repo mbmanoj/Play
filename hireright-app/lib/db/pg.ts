@@ -8,7 +8,12 @@ import {
   RankingResult,
   Candidate,
   AuditEvent,
-  Role
+  Role,
+  Interview,
+  Scorecard,
+  ClientAction,
+  OutboxMessage,
+  InterviewStatus
 } from "../types";
 import { seedDB } from "../seed";
 import { Repo } from "./repo";
@@ -78,6 +83,44 @@ CREATE TABLE IF NOT EXISTS audit (
   entity_id   text NOT NULL,
   rationale   text
 );
+CREATE TABLE IF NOT EXISTS interviews (
+  id           text PRIMARY KEY,
+  client_id    text NOT NULL,
+  job_id       text NOT NULL,
+  candidate_id text NOT NULL,
+  status       text NOT NULL,
+  channel      text NOT NULL,
+  transcript   jsonb NOT NULL,
+  created_at   timestamptz NOT NULL,
+  completed_at timestamptz
+);
+CREATE TABLE IF NOT EXISTS scorecards (
+  id           text PRIMARY KEY,
+  interview_id text NOT NULL,
+  candidate_id text NOT NULL,
+  job_id       text NOT NULL,
+  data         jsonb NOT NULL,
+  created_at   timestamptz NOT NULL
+);
+CREATE TABLE IF NOT EXISTS actions (
+  id           text PRIMARY KEY,
+  client_id    text NOT NULL,
+  job_id       text NOT NULL,
+  candidate_id text NOT NULL,
+  type         text NOT NULL,
+  detail       text NOT NULL,
+  triggered_by text NOT NULL,
+  triggered_at timestamptz NOT NULL
+);
+CREATE TABLE IF NOT EXISTS outbox (
+  id         text PRIMARY KEY,
+  client_id  text NOT NULL,
+  recipient  text NOT NULL,
+  subject    text NOT NULL,
+  body       text NOT NULL,
+  kind       text NOT NULL,
+  created_at timestamptz NOT NULL
+);
 `;
 
 export class PgRepo implements Repo {
@@ -135,14 +178,18 @@ export class PgRepo implements Repo {
   // ── reads ───────────────────────────────────────────────────────────
   async snapshot(): Promise<DB> {
     await this.init();
-    const [clients, users, jobs, plans, candidates, rankings, audit] = await Promise.all([
+    const [clients, users, jobs, plans, candidates, rankings, audit, interviews, scorecards, actions, outbox] = await Promise.all([
       this.pool.query("SELECT * FROM clients"),
       this.pool.query("SELECT * FROM users"),
       this.pool.query("SELECT * FROM jobs ORDER BY created_at"),
       this.pool.query("SELECT * FROM plans ORDER BY created_at"),
       this.pool.query("SELECT * FROM candidates ORDER BY ingested_at"),
       this.pool.query("SELECT * FROM rankings ORDER BY created_at"),
-      this.pool.query("SELECT * FROM audit ORDER BY ts")
+      this.pool.query("SELECT * FROM audit ORDER BY ts"),
+      this.pool.query("SELECT * FROM interviews ORDER BY created_at"),
+      this.pool.query("SELECT * FROM scorecards ORDER BY created_at"),
+      this.pool.query("SELECT * FROM actions ORDER BY triggered_at"),
+      this.pool.query("SELECT * FROM outbox ORDER BY created_at")
     ]);
     return {
       clients: clients.rows.map((r) => ({ id: r.id, name: r.name })),
@@ -165,6 +212,22 @@ export class PgRepo implements Repo {
         eventId: r.event_id, timestamp: new Date(r.ts).toISOString(), actorType: r.actor_type,
         actorId: r.actor_id, action: r.action, entityType: r.entity_type, entityId: r.entity_id,
         rationale: r.rationale || undefined
+      })),
+      interviews: interviews.rows.map((r) => ({
+        id: r.id, clientId: r.client_id, jobId: r.job_id, candidateId: r.candidate_id,
+        status: r.status as InterviewStatus, channel: r.channel, transcript: r.transcript,
+        createdAt: new Date(r.created_at).toISOString(),
+        completedAt: r.completed_at ? new Date(r.completed_at).toISOString() : null
+      })),
+      scorecards: scorecards.rows.map((r) => r.data as Scorecard),
+      actions: actions.rows.map((r) => ({
+        id: r.id, clientId: r.client_id, jobId: r.job_id, candidateId: r.candidate_id,
+        type: r.type, detail: r.detail, triggeredBy: r.triggered_by,
+        triggeredAt: new Date(r.triggered_at).toISOString()
+      })),
+      outbox: outbox.rows.map((r) => ({
+        id: r.id, clientId: r.client_id, to: r.recipient, subject: r.subject, body: r.body,
+        kind: r.kind, createdAt: new Date(r.created_at).toISOString()
       }))
     };
   }
@@ -239,9 +302,51 @@ export class PgRepo implements Repo {
     await this.insertAudit(e);
   }
 
+  async addInterview(i: Interview): Promise<void> {
+    await this.saveInterview(i);
+  }
+
+  async saveInterview(i: Interview): Promise<void> {
+    await this.init();
+    await this.pool.query(
+      `INSERT INTO interviews(id,client_id,job_id,candidate_id,status,channel,transcript,created_at,completed_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, transcript=EXCLUDED.transcript, completed_at=EXCLUDED.completed_at`,
+      [i.id, i.clientId, i.jobId, i.candidateId, i.status, i.channel, JSON.stringify(i.transcript), i.createdAt, i.completedAt]
+    );
+  }
+
+  async addScorecard(s: Scorecard): Promise<void> {
+    await this.init();
+    await this.pool.query(
+      `INSERT INTO scorecards(id,interview_id,candidate_id,job_id,data,created_at) VALUES($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (id) DO NOTHING`,
+      [s.id, s.interviewId, s.candidateId, s.jobId, JSON.stringify(s), s.createdAt]
+    );
+  }
+
+  async addAction(a: ClientAction): Promise<void> {
+    await this.init();
+    await this.pool.query(
+      `INSERT INTO actions(id,client_id,job_id,candidate_id,type,detail,triggered_by,triggered_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [a.id, a.clientId, a.jobId, a.candidateId, a.type, a.detail, a.triggeredBy, a.triggeredAt]
+    );
+  }
+
+  async addOutbox(m: OutboxMessage): Promise<void> {
+    await this.init();
+    await this.pool.query(
+      `INSERT INTO outbox(id,client_id,recipient,subject,body,kind,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)`,
+      [m.id, m.clientId, m.to, m.subject, m.body, m.kind, m.createdAt]
+    );
+  }
+
   async reset(): Promise<void> {
     await this.init();
-    await this.pool.query("TRUNCATE rankings, plans, jobs, candidates, users, audit, clients CASCADE");
+    await this.pool.query(
+      "TRUNCATE rankings, plans, jobs, candidates, users, audit, interviews, scorecards, actions, outbox, clients CASCADE"
+    );
     await this.seed();
   }
 }
