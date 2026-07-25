@@ -179,36 +179,47 @@ export async function runScreening(jobId: string) {
 }
 
 // ── Folder ingestion (M1) ─────────────────────────────────────────────
+const MAX_FILES_PER_UPLOAD = 200;
+
 export async function ingestFolder(formData: FormData) {
   const user = await requireSession();
   assertCanMutate(user);
   const repo = getRepo();
-  const files = formData.getAll("files") as File[];
-  let count = 0;
+  const files = (formData.getAll("files") as File[]).slice(0, MAX_FILES_PER_UPLOAD);
+
+  let ingested = 0;
+  const skipped: string[] = [];
 
   for (const file of files) {
     if (!file || typeof file.arrayBuffer !== "function") continue;
-    const buf = Buffer.from(await file.arrayBuffer());
-    const text = await extractText(file.name, buf);
-    await repo.addCandidate({
-      id: uid("cand"),
-      clientId: user.clientId,
-      name: guessName(file.name, text),
-      source: "folder:upload",
-      fileName: file.name,
-      resumeText: text,
-      skills: deriveSkills(text),
-      ingestedAt: nowISO()
-    });
-    count++;
+    try {
+      const buf = Buffer.from(await file.arrayBuffer());
+      const text = await extractText(file.name, buf); // throws on bad type/size/empty
+      await repo.addCandidate({
+        id: uid("cand"),
+        clientId: user.clientId,
+        name: guessName(file.name, text),
+        source: "folder:upload",
+        fileName: file.name,
+        resumeText: text,
+        skills: deriveSkills(text),
+        ingestedAt: nowISO()
+      });
+      ingested++;
+    } catch (e) {
+      skipped.push(`${file.name} (${(e as Error).message})`);
+    }
   }
+
   await logAudit({
     actorType: "client_user",
     actorId: user.id,
     action: "candidates.ingested",
     entityType: "client",
     entityId: user.clientId,
-    rationale: `Folder ingestion: ${count} resume(s) parsed.`
+    rationale:
+      `Folder ingestion: ${ingested} resume(s) parsed` +
+      (skipped.length ? `; ${skipped.length} skipped — ${skipped.slice(0, 5).join("; ")}${skipped.length > 5 ? "…" : ""}` : ".")
   });
   revalidatePath("/candidates");
 }
