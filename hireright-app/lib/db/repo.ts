@@ -18,6 +18,7 @@ import {
 export interface Repo {
   snapshot(): Promise<DB>;
   userById(id: string): Promise<ClientUser | null>;
+  createUser(user: ClientUser): Promise<void>;
 
   createJob(job: Job): Promise<void>;
   setJobStage(jobId: string, stage: JobStage): Promise<void>;

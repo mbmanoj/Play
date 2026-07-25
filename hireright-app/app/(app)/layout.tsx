@@ -7,7 +7,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session) redirect("/login");
   return (
     <div className="shell">
-      <Sidebar userName={session.name} />
+      <Sidebar userName={session.name} role={session.role} />
       <main className="main">{children}</main>
     </div>
   );

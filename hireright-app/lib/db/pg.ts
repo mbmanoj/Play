@@ -177,6 +177,14 @@ export class PgRepo implements Repo {
     return { id: r.id, clientId: r.client_id, name: r.name, email: r.email, role: r.role as Role };
   }
 
+  async createUser(user: ClientUser): Promise<void> {
+    await this.init();
+    await this.pool.query(
+      "INSERT INTO users(id,client_id,name,email,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING",
+      [user.id, user.clientId, user.name, user.email, user.role]
+    );
+  }
+
   // ── writes ──────────────────────────────────────────────────────────
   async createJob(job: Job): Promise<void> {
     await this.init();

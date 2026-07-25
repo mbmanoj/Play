@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getRepo } from "@/lib/db/repo";
-import { setSession, clearSession, requireSession } from "@/lib/auth";
+import { setSession, clearSession, requireSession, assertCanMutate } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { getAI, ACTIVE_PROVIDER } from "@/lib/ai";
 import { uid, nowISO } from "@/lib/ids";
@@ -25,6 +25,7 @@ export async function logout() {
 // ── Create job (M2: JD upload) ────────────────────────────────────────
 export async function createJob(formData: FormData) {
   const user = await requireSession();
+  assertCanMutate(user);
   const title = String(formData.get("title") || "Untitled role").trim();
   const jdText = String(formData.get("jdText") || "").trim();
 
@@ -77,6 +78,7 @@ export async function generatePlan(jobId: string) {
 // ── Edit plan (M2) ────────────────────────────────────────────────────
 export async function updatePlan(formData: FormData) {
   const user = await requireSession();
+  assertCanMutate(user);
   const planId = String(formData.get("planId"));
   const cutoffValue = Number(formData.get("cutoffValue") || 5);
 
@@ -115,6 +117,7 @@ export async function updatePlan(formData: FormData) {
 // ── Approve plan (GATE 1) ─────────────────────────────────────────────
 export async function approvePlan(formData: FormData) {
   const user = await requireSession();
+  assertCanMutate(user);
   const planId = String(formData.get("planId"));
 
   const repo = getRepo();
@@ -142,6 +145,7 @@ export async function approvePlan(formData: FormData) {
 
 // ── Run screening (M3) ────────────────────────────────────────────────
 export async function runScreening(jobId: string) {
+  assertCanMutate(await requireSession());
   const repo = getRepo();
   const db = await repo.snapshot();
   const job = db.jobs.find((j) => j.id === jobId);
@@ -177,6 +181,7 @@ export async function runScreening(jobId: string) {
 // ── Folder ingestion (M1) ─────────────────────────────────────────────
 export async function ingestFolder(formData: FormData) {
   const user = await requireSession();
+  assertCanMutate(user);
   const repo = getRepo();
   const files = formData.getAll("files") as File[];
   let count = 0;
@@ -210,7 +215,7 @@ export async function ingestFolder(formData: FormData) {
 
 // ── Demo reset ────────────────────────────────────────────────────────
 export async function resetDemo() {
-  await requireSession();
+  assertCanMutate(await requireSession());
   await getRepo().reset();
   revalidatePath("/dashboard");
   redirect("/dashboard");

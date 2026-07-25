@@ -11,7 +11,7 @@ const LINKS = [
   { href: "/compliance", label: "Compliance" }
 ];
 
-export default function Sidebar({ userName }: { userName: string }) {
+export default function Sidebar({ userName, role }: { userName: string; role: string }) {
   const path = usePathname();
   return (
     <aside className="sidebar">
@@ -28,7 +28,9 @@ export default function Sidebar({ userName }: { userName: string }) {
         ))}
       </nav>
       <div className="foot">
-        <div style={{ marginBottom: ".5rem" }}>{userName}</div>
+        <div style={{ marginBottom: ".5rem" }}>
+          {userName} <span className="badge indigo" style={{ marginLeft: ".25rem" }}>{role}</span>
+        </div>
         <form action={logout}>
           <button className="btn ghost" style={{ color: "#c7d2fe", borderColor: "rgba(255,255,255,.2)" }}>
             Sign out

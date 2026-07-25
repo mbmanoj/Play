@@ -45,6 +45,12 @@ export class FileRepo implements Repo {
     return this.load().users.find((u) => u.id === id) || null;
   }
 
+  async createUser(user: ClientUser): Promise<void> {
+    this.mutate((db) => {
+      if (!db.users.some((u) => u.id === user.id)) db.users.push(user);
+    });
+  }
+
   async createJob(job: Job): Promise<void> {
     this.mutate((db) => db.jobs.push(job));
   }
