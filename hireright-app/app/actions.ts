@@ -216,7 +216,7 @@ export async function advanceCandidate(jobId: string, candidateId: string) {
       action: "gate.advance_approved",
       entityType: "candidate",
       entityId: candidateId,
-      rationale: `APPROVAL GATE 2: ${cand.name} advanced to interview; invite queued to outbox.`
+      rationale: `APPROVAL GATE 2: ${cand.name} advanced to interview; invite DRAFT created for review (not sent).`
     });
   }
   revalidatePath(`/jobs/${jobId}/candidate/${candidateId}`);
@@ -295,7 +295,7 @@ export async function triggerAction(jobId: string, candidateId: string, type: Ac
   const job = db.jobs.find((j) => j.id === jobId);
   if (!cand || !job) throw new Error("Not found");
 
-  const detail = type === "send_email" ? `Email sent to ${cand.name}` : `Meeting scheduled with ${cand.name}`;
+  const detail = type === "send_email" ? `Email draft created for ${cand.name}` : `Meeting-invite draft created for ${cand.name}`;
   const action: ClientAction = {
     id: uid("act"),
     clientId: user.clientId,
@@ -311,7 +311,7 @@ export async function triggerAction(jobId: string, candidateId: string, type: Ac
     id: uid("msg"),
     clientId: user.clientId,
     to: `${cand.name} <candidate@example.com>`,
-    subject: type === "send_email" ? `Next steps — ${job.title}` : `Interview scheduled — ${job.title}`,
+    subject: type === "send_email" ? `Next steps — ${job.title}` : `Interview scheduling — ${job.title}`,
     body:
       type === "send_email"
         ? `Hi ${cand.name},\n\nThanks for interviewing for ${job.title}. We'd like to move forward — a member of the team will follow up shortly.`
@@ -325,7 +325,7 @@ export async function triggerAction(jobId: string, candidateId: string, type: Ac
     action: `action.${type}`,
     entityType: "candidate",
     entityId: candidateId,
-    rationale: `GATE 3 (client-initiated, never the AI): ${detail}.`
+    rationale: `GATE 3 (client-initiated, never the AI): ${detail} — draft for review, not sent.`
   });
   revalidatePath(`/jobs/${jobId}/candidate/${candidateId}`);
 }

@@ -122,14 +122,15 @@ export default async function CandidateDetail({ params }: { params: { id: string
       {scorecard && (
         <div className="card">
           <h3 style={{ marginBottom: ".5rem" }}>Client actions <span className="muted small">(you decide — never the AI)</span></h3>
+          <p className="muted small" style={{ marginBottom: ".5rem" }}>These create a draft email for you to review — nothing is auto-sent.</p>
           <div className="row" style={{ gap: ".5rem" }}>
             <form action={triggerAction.bind(null, job.id, cand.id, "send_email")}>
-              <button className="btn secondary">✉ Send email</button>
+              <button className="btn secondary">✉ Draft email</button>
             </form>
             <form action={triggerAction.bind(null, job.id, cand.id, "schedule_meeting")}>
-              <button className="btn secondary">📅 Schedule meeting</button>
+              <button className="btn secondary">📅 Draft meeting invite</button>
             </form>
-            <Link className="btn ghost" href="/outbox">View outbox →</Link>
+            <Link className="btn ghost" href="/drafts">View drafts →</Link>
           </div>
           {actions.length > 0 && (
             <ul className="small muted" style={{ margin: ".75rem 0 0 1.1rem" }}>

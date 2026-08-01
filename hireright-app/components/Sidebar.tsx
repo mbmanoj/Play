@@ -7,7 +7,7 @@ const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/jobs/new", label: "+ New role (JD)" },
   { href: "/candidates", label: "Candidates" },
-  { href: "/outbox", label: "Outbox" },
+  { href: "/drafts", label: "Email drafts" },
   { href: "/integrations", label: "Integrations" },
   { href: "/compliance", label: "Compliance" }
 ];
