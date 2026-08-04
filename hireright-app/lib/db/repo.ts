@@ -10,7 +10,10 @@ import {
   Interview,
   Scorecard,
   ClientAction,
-  OutboxMessage
+  OutboxMessage,
+  CandidateUser,
+  Application,
+  MockInterview
 } from "../types";
 
 // ── Repository interface (async) ──────────────────────────────────────
@@ -40,6 +43,14 @@ export interface Repo {
   addScorecard(s: Scorecard): Promise<void>;
   addAction(a: ClientAction): Promise<void>;
   addOutbox(m: OutboxMessage): Promise<void>;
+
+  // Candidate portal (M8/M9)
+  candidateUserById(id: string): Promise<CandidateUser | null>;
+  candidateUserByEmail(email: string): Promise<CandidateUser | null>;
+  createCandidateUser(u: CandidateUser): Promise<void>;
+  saveCandidateUser(u: CandidateUser): Promise<void>; // upsert (profile edits)
+  addApplication(a: Application): Promise<void>;
+  addMockInterview(m: MockInterview): Promise<void>;
 
   reset(): Promise<void>;
 }

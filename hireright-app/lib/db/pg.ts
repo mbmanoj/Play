@@ -13,7 +13,10 @@ import {
   Scorecard,
   ClientAction,
   OutboxMessage,
-  InterviewStatus
+  InterviewStatus,
+  CandidateUser,
+  Application,
+  MockInterview
 } from "../types";
 import { seedDB } from "../seed";
 import { Repo } from "./repo";
@@ -121,6 +124,33 @@ CREATE TABLE IF NOT EXISTS outbox (
   kind       text NOT NULL,
   created_at timestamptz NOT NULL
 );
+CREATE TABLE IF NOT EXISTS candidate_users (
+  id          text PRIMARY KEY,
+  name        text NOT NULL,
+  email       text NOT NULL UNIQUE,
+  resume_text text NOT NULL,
+  skills      jsonb NOT NULL,
+  created_at  timestamptz NOT NULL
+);
+CREATE TABLE IF NOT EXISTS applications (
+  id                text PRIMARY KEY,
+  candidate_user_id text NOT NULL REFERENCES candidate_users(id),
+  job_id            text NOT NULL,
+  client_id         text NOT NULL,
+  candidate_id      text NOT NULL,
+  created_at        timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS applications_user_idx ON applications(candidate_user_id);
+CREATE TABLE IF NOT EXISTS mock_interviews (
+  id                text PRIMARY KEY,
+  candidate_user_id text NOT NULL REFERENCES candidate_users(id),
+  job_id            text NOT NULL,
+  job_title         text NOT NULL,
+  turns             jsonb NOT NULL,
+  overall_score     integer NOT NULL,
+  created_at        timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mock_user_idx ON mock_interviews(candidate_user_id);
 `;
 
 export class PgRepo implements Repo {
@@ -155,8 +185,17 @@ export class PgRepo implements Repo {
         "INSERT INTO users(id,client_id,name,email,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING",
         [u.id, u.clientId, u.name, u.email, u.role]
       );
+    for (const j of db.jobs) await this.insertJob(j);
     for (const c of db.candidates) await this.insertCandidate(c);
     for (const e of db.audit) await this.insertAudit(e);
+  }
+
+  private async insertJob(job: Job): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO jobs(id,client_id,title,jd_text,stage,created_at,created_by)
+       VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
+      [job.id, job.clientId, job.title, job.jdText, job.stage, job.createdAt, job.createdBy]
+    );
   }
 
   private async insertCandidate(c: Candidate): Promise<void> {
@@ -178,7 +217,7 @@ export class PgRepo implements Repo {
   // ── reads ───────────────────────────────────────────────────────────
   async snapshot(): Promise<DB> {
     await this.init();
-    const [clients, users, jobs, plans, candidates, rankings, audit, interviews, scorecards, actions, outbox] = await Promise.all([
+    const [clients, users, jobs, plans, candidates, rankings, audit, interviews, scorecards, actions, outbox, candidateUsers, applications, mockInterviews] = await Promise.all([
       this.pool.query("SELECT * FROM clients"),
       this.pool.query("SELECT * FROM users"),
       this.pool.query("SELECT * FROM jobs ORDER BY created_at"),
@@ -189,7 +228,10 @@ export class PgRepo implements Repo {
       this.pool.query("SELECT * FROM interviews ORDER BY created_at"),
       this.pool.query("SELECT * FROM scorecards ORDER BY created_at"),
       this.pool.query("SELECT * FROM actions ORDER BY triggered_at"),
-      this.pool.query("SELECT * FROM outbox ORDER BY created_at")
+      this.pool.query("SELECT * FROM outbox ORDER BY created_at"),
+      this.pool.query("SELECT * FROM candidate_users ORDER BY created_at"),
+      this.pool.query("SELECT * FROM applications ORDER BY created_at"),
+      this.pool.query("SELECT * FROM mock_interviews ORDER BY created_at")
     ]);
     return {
       clients: clients.rows.map((r) => ({ id: r.id, name: r.name })),
@@ -228,6 +270,19 @@ export class PgRepo implements Repo {
       outbox: outbox.rows.map((r) => ({
         id: r.id, clientId: r.client_id, to: r.recipient, subject: r.subject, body: r.body,
         kind: r.kind, createdAt: new Date(r.created_at).toISOString()
+      })),
+      candidateUsers: candidateUsers.rows.map((r) => ({
+        id: r.id, name: r.name, email: r.email, resumeText: r.resume_text,
+        skills: r.skills, createdAt: new Date(r.created_at).toISOString()
+      })),
+      applications: applications.rows.map((r) => ({
+        id: r.id, candidateUserId: r.candidate_user_id, jobId: r.job_id,
+        clientId: r.client_id, candidateId: r.candidate_id,
+        createdAt: new Date(r.created_at).toISOString()
+      })),
+      mockInterviews: mockInterviews.rows.map((r) => ({
+        id: r.id, candidateUserId: r.candidate_user_id, jobId: r.job_id, jobTitle: r.job_title,
+        turns: r.turns, overallScore: r.overall_score, createdAt: new Date(r.created_at).toISOString()
       }))
     };
   }
@@ -251,10 +306,7 @@ export class PgRepo implements Repo {
   // ── writes ──────────────────────────────────────────────────────────
   async createJob(job: Job): Promise<void> {
     await this.init();
-    await this.pool.query(
-      `INSERT INTO jobs(id,client_id,title,jd_text,stage,created_at,created_by) VALUES($1,$2,$3,$4,$5,$6,$7)`,
-      [job.id, job.clientId, job.title, job.jdText, job.stage, job.createdAt, job.createdBy]
-    );
+    await this.insertJob(job);
   }
 
   async setJobStage(jobId: string, stage: JobStage): Promise<void> {
@@ -342,10 +394,59 @@ export class PgRepo implements Repo {
     );
   }
 
+  // ── Candidate portal (M8/M9) ────────────────────────────────────────
+  async candidateUserById(id: string): Promise<CandidateUser | null> {
+    await this.init();
+    const { rows } = await this.pool.query("SELECT * FROM candidate_users WHERE id=$1", [id]);
+    return rows[0] ? this.mapCandidateUser(rows[0]) : null;
+  }
+
+  async candidateUserByEmail(email: string): Promise<CandidateUser | null> {
+    await this.init();
+    const { rows } = await this.pool.query("SELECT * FROM candidate_users WHERE lower(email)=lower($1)", [email]);
+    return rows[0] ? this.mapCandidateUser(rows[0]) : null;
+  }
+
+  private mapCandidateUser(r: any): CandidateUser {
+    return { id: r.id, name: r.name, email: r.email, resumeText: r.resume_text, skills: r.skills, createdAt: new Date(r.created_at).toISOString() };
+  }
+
+  async createCandidateUser(u: CandidateUser): Promise<void> {
+    await this.saveCandidateUser(u);
+  }
+
+  async saveCandidateUser(u: CandidateUser): Promise<void> {
+    await this.init();
+    await this.pool.query(
+      `INSERT INTO candidate_users(id,name,email,resume_text,skills,created_at)
+       VALUES($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, resume_text=EXCLUDED.resume_text, skills=EXCLUDED.skills`,
+      [u.id, u.name, u.email, u.resumeText, JSON.stringify(u.skills), u.createdAt]
+    );
+  }
+
+  async addApplication(a: Application): Promise<void> {
+    await this.init();
+    await this.pool.query(
+      `INSERT INTO applications(id,candidate_user_id,job_id,client_id,candidate_id,created_at)
+       VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING`,
+      [a.id, a.candidateUserId, a.jobId, a.clientId, a.candidateId, a.createdAt]
+    );
+  }
+
+  async addMockInterview(m: MockInterview): Promise<void> {
+    await this.init();
+    await this.pool.query(
+      `INSERT INTO mock_interviews(id,candidate_user_id,job_id,job_title,turns,overall_score,created_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
+      [m.id, m.candidateUserId, m.jobId, m.jobTitle, JSON.stringify(m.turns), m.overallScore, m.createdAt]
+    );
+  }
+
   async reset(): Promise<void> {
     await this.init();
     await this.pool.query(
-      "TRUNCATE rankings, plans, jobs, candidates, users, audit, interviews, scorecards, actions, outbox, clients CASCADE"
+      "TRUNCATE rankings, plans, jobs, candidates, users, audit, interviews, scorecards, actions, outbox, candidate_users, applications, mock_interviews, clients CASCADE"
     );
     await this.seed();
   }

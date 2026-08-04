@@ -185,12 +185,56 @@ export interface OutboxMessage {
 export interface AuditEvent {
   eventId: string;
   timestamp: string;
-  actorType: "ai" | "client_user" | "system";
+  actorType: "ai" | "client_user" | "system" | "candidate";
   actorId: string;
   action: string; // e.g. "plan.generated", "gate.plan_approved"
   entityType: string;
   entityId: string;
   rationale?: string;
+}
+
+// ── Candidate portal (M8) + mock interview (M9) ───────────────────────
+// A CandidateUser is a self-registered job-seeker — a DIFFERENT persona
+// from ClientUser (employer) and from Candidate (a client's applicant
+// record). Candidates own their data; it is never client-scoped.
+export interface CandidateUser {
+  id: string;
+  name: string;
+  email: string;
+  resumeText: string;
+  skills: string[];
+  createdAt: string;
+}
+
+// A candidate applying to a job links their portal identity to an
+// employer-side Candidate record (created on apply, so they enter that
+// client's screening pipeline). Live status is DERIVED from the employer
+// pipeline — never stored mutably here — so the two sides can't disagree.
+export interface Application {
+  id: string;
+  candidateUserId: string;
+  jobId: string;
+  clientId: string;
+  candidateId: string; // the employer-side Candidate created on apply
+  createdAt: string;
+}
+
+// M9 mock interview — coaching practice, PRIVATE to the candidate. Never
+// visible to any employer and never part of a real screening decision.
+export interface MockTurn {
+  question: string;
+  answer: string;
+  score: number; // 0..100
+  feedback: string;
+}
+export interface MockInterview {
+  id: string;
+  candidateUserId: string;
+  jobId: string;
+  jobTitle: string;
+  turns: MockTurn[];
+  overallScore: number;
+  createdAt: string;
 }
 
 // ── Persisted DB shape ────────────────────────────────────────────────
@@ -206,4 +250,8 @@ export interface DB {
   actions: ClientAction[];
   outbox: OutboxMessage[];
   audit: AuditEvent[];
+  // Candidate portal (M8/M9)
+  candidateUsers: CandidateUser[];
+  applications: Application[];
+  mockInterviews: MockInterview[];
 }

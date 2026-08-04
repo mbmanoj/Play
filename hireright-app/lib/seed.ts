@@ -1,4 +1,4 @@
-import { DB, Candidate } from "./types";
+import { DB, Candidate, Job } from "./types";
 
 // ── Demo seed data ────────────────────────────────────────────────────
 // Eight sample candidate resumes (plain text) so the app has a pool to
@@ -120,7 +120,7 @@ export function seedDB(): DB {
         role: "admin"
       }
     ],
-    jobs: [],
+    jobs: JOBS,
     plans: [],
     candidates: CANDIDATES,
     rankings: [],
@@ -128,6 +128,9 @@ export function seedDB(): DB {
     scorecards: [],
     actions: [],
     outbox: [],
+    candidateUsers: [],
+    applications: [],
+    mockInterviews: [],
     audit: [
       {
         eventId: "evt_seed",
@@ -160,3 +163,41 @@ Nice to have:
 - Mentoring / team leadership
 - Machine learning exposure
 `;
+
+const FRONTEND_JD = `Frontend Engineer
+
+We're hiring a Frontend Engineer to build our customer-facing product.
+
+Requirements (must have):
+- 3+ years frontend engineering
+- Strong TypeScript and React
+- REST / GraphQL API integration
+- Solid CSS and accessible UI
+
+Nice to have:
+- Node for BFF layers
+- Data visualization
+`;
+
+// Two live roles so the candidate marketplace has something to match against
+// out of the box (stage SCREENING = client is actively hiring).
+const JOBS: Job[] = [
+  {
+    id: "job_backend",
+    clientId: DEMO_CLIENT,
+    title: "Senior Backend Engineer",
+    jdText: SAMPLE_JD,
+    stage: "SCREENING",
+    createdAt: new Date("2026-06-02T09:00:00Z").toISOString(),
+    createdBy: "user_demo"
+  },
+  {
+    id: "job_frontend",
+    clientId: DEMO_CLIENT,
+    title: "Frontend Engineer",
+    jdText: FRONTEND_JD,
+    stage: "SCREENING",
+    createdAt: new Date("2026-06-03T09:00:00Z").toISOString(),
+    createdBy: "user_demo"
+  }
+];

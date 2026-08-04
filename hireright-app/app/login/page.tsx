@@ -42,6 +42,9 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
         <p className="small muted" style={{ marginTop: "1rem" }}>
           {hasGoogle ? "Google OAuth enabled" : "Demo mode"} · Acme Corp workspace
         </p>
+        <a href="/portal" className="small muted" style={{ display: "block", marginTop: ".5rem" }}>
+          Looking for a job? Candidate portal →
+        </a>
       </div>
     </div>
   );

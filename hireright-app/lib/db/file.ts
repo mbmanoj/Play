@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { DB, ClientUser, Job, JobStage, ClosurePlan, RankingResult, Candidate, AuditEvent, Interview, Scorecard, ClientAction, OutboxMessage } from "../types";
+import { DB, ClientUser, Job, JobStage, ClosurePlan, RankingResult, Candidate, AuditEvent, Interview, Scorecard, ClientAction, OutboxMessage, CandidateUser, Application, MockInterview } from "../types";
 import { seedDB } from "../seed";
 import { Repo } from "./repo";
 
@@ -17,7 +17,13 @@ export class FileRepo implements Repo {
   private load(): DB {
     if (this.cache) return this.cache;
     if (fs.existsSync(DB_PATH)) {
-      this.cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as DB;
+      const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as DB;
+      // Backfill arrays added after a store was first written, so older
+      // db.json files keep working across upgrades.
+      db.candidateUsers ??= [];
+      db.applications ??= [];
+      db.mockInterviews ??= [];
+      this.cache = db;
     } else {
       this.cache = seedDB();
       this.persist();
@@ -114,6 +120,38 @@ export class FileRepo implements Repo {
 
   async addOutbox(m: OutboxMessage): Promise<void> {
     this.mutate((db) => db.outbox.push(m));
+  }
+
+  // ── Candidate portal (M8/M9) ────────────────────────────────────────
+  async candidateUserById(id: string): Promise<CandidateUser | null> {
+    return this.load().candidateUsers.find((u) => u.id === id) || null;
+  }
+
+  async candidateUserByEmail(email: string): Promise<CandidateUser | null> {
+    const e = email.toLowerCase();
+    return this.load().candidateUsers.find((u) => u.email.toLowerCase() === e) || null;
+  }
+
+  async createCandidateUser(u: CandidateUser): Promise<void> {
+    this.mutate((db) => {
+      if (!db.candidateUsers.some((x) => x.id === u.id)) db.candidateUsers.push(u);
+    });
+  }
+
+  async saveCandidateUser(u: CandidateUser): Promise<void> {
+    this.mutate((db) => {
+      const i = db.candidateUsers.findIndex((x) => x.id === u.id);
+      if (i >= 0) db.candidateUsers[i] = u;
+      else db.candidateUsers.push(u);
+    });
+  }
+
+  async addApplication(a: Application): Promise<void> {
+    this.mutate((db) => db.applications.push(a));
+  }
+
+  async addMockInterview(m: MockInterview): Promise<void> {
+    this.mutate((db) => db.mockInterviews.push(m));
   }
 
   async reset(): Promise<void> {
