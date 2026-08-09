@@ -9,7 +9,7 @@ import { getAI, ACTIVE_PROVIDER } from "@/lib/ai";
 import { uid, nowISO } from "@/lib/ids";
 import { extractText, deriveSkills, guessName } from "@/lib/ingestion/parse";
 import { deriveKeywords } from "@/lib/ai/mock";
-import { Job, Interview, Scorecard, ClientAction, ActionType, Criterion } from "@/lib/types";
+import { Job, Interview, Scorecard, ClientAction, ActionType, Criterion, ClosurePlan } from "@/lib/types";
 
 // ── Auth ──────────────────────────────────────────────────────────────
 export async function login() {
@@ -77,28 +77,15 @@ export async function generatePlan(jobId: string) {
 }
 
 // ── Edit plan (M2) ────────────────────────────────────────────────────
-export async function updatePlan(formData: FormData) {
-  const user = await requireSession();
-  assertCanMutate(user);
-  const planId = String(formData.get("planId"));
-  const cutoffValue = Number(formData.get("cutoffValue") || 5);
+// Apply every field edit from the criteria form onto the plan (in place):
+// labels, type, weight, knockout, interview questions, and an optional new
+// criterion from the blank add-row. Renaming a criterion re-derives its
+// scoring keywords so the screener matches the new requirement, not the old.
+function applyPlanFormEdits(plan: ClosurePlan, formData: FormData) {
+  const cv = formData.get("cutoffValue");
+  if (cv !== null) plan.cutoffValue = Number(cv || plan.cutoffValue || 5);
 
-  const repo = getRepo();
-  const db = await repo.snapshot();
-  const plan = db.plans.find((p) => p.planId === planId);
-  if (!plan || plan.status !== "draft") return;
-
-  plan.cutoffValue = cutoffValue;
-
-  // Edit existing criteria (label, type, weight, knockout) and collect
-  // removals. Renaming a criterion re-derives its scoring keywords, so the
-  // screener actually matches on the new requirement rather than the old one.
-  const removed: string[] = [];
   plan.criteria.forEach((c) => {
-    if (formData.get(`remove_${c.id}`) === "on") {
-      removed.push(c.id);
-      return;
-    }
     const lbl = formData.get(`label_${c.id}`);
     if (lbl !== null && String(lbl).trim() && String(lbl).trim() !== c.label) {
       c.label = String(lbl).trim();
@@ -107,16 +94,18 @@ export async function updatePlan(formData: FormData) {
     const kind = formData.get(`kind_${c.id}`);
     if (kind === "must_have" || kind === "nice_to_have") c.kind = kind;
     const w = formData.get(`weight_${c.id}`);
-    const ko = formData.get(`knockout_${c.id}`);
     if (w !== null) c.weight = Math.max(0, Math.min(1, Number(w)));
-    c.isKnockout = ko === "on";
+    c.isKnockout = formData.get(`knockout_${c.id}`) === "on";
   });
-  // Apply removals — but never leave a plan with zero criteria.
-  if (removed.length && removed.length < plan.criteria.length) {
-    plan.criteria = plan.criteria.filter((c) => !removed.includes(c.id));
-  }
 
-  // Add a new criterion if the blank row was filled in.
+  plan.interviewBlueprint.forEach((q) => {
+    const t = formData.get(`q_${q.id}`);
+    if (t !== null && String(t) !== q.text) {
+      q.text = String(t);
+      q.editedByClient = true;
+    }
+  });
+
   const newLabel = String(formData.get("new_label") || "").trim();
   if (newLabel) {
     const newKind = formData.get("new_kind") === "nice_to_have" ? "nice_to_have" : "must_have";
@@ -130,23 +119,53 @@ export async function updatePlan(formData: FormData) {
     };
     plan.criteria.push(nc);
   }
+}
 
-  plan.interviewBlueprint.forEach((q) => {
-    const t = formData.get(`q_${q.id}`);
-    if (t !== null && String(t) !== q.text) {
-      q.text = String(t);
-      q.editedByClient = true;
-    }
-  });
+export async function updatePlan(formData: FormData) {
+  const user = await requireSession();
+  assertCanMutate(user);
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const plan = db.plans.find((p) => p.planId === String(formData.get("planId")));
+  if (!plan || plan.status !== "draft") return;
+
+  applyPlanFormEdits(plan, formData);
   await repo.savePlan(plan);
-
   await logAudit({
     actorType: "client_user",
     actorId: user.id,
     action: "plan.edited",
     entityType: "plan",
-    entityId: planId,
-    rationale: "Client edited plan criteria (labels/type/weights/knockouts, add/remove) and/or interview questions."
+    entityId: plan.planId,
+    rationale: "Client edited plan criteria (labels/type/weights/knockouts, additions) and/or interview questions."
+  });
+  revalidatePath(`/jobs/${plan.jobId}`);
+}
+
+// Remove one criterion. The id is BOUND into the action (not read from a submit
+// button's name) — React server actions don't serialize the submitter's
+// name/value, so a bound arg is the reliable way to say which row to drop. Any
+// other pending field edits in the form are applied too, so nothing is lost.
+export async function removeCriterion(planId: string, critId: string, formData: FormData) {
+  const user = await requireSession();
+  assertCanMutate(user);
+  const repo = getRepo();
+  const db = await repo.snapshot();
+  const plan = db.plans.find((p) => p.planId === planId);
+  if (!plan || plan.status !== "draft") return;
+
+  applyPlanFormEdits(plan, formData);
+  if (plan.criteria.length > 1) {
+    plan.criteria = plan.criteria.filter((c) => c.id !== critId); // never leave zero
+  }
+  await repo.savePlan(plan);
+  await logAudit({
+    actorType: "client_user",
+    actorId: user.id,
+    action: "plan.criterion_removed",
+    entityType: "plan",
+    entityId: plan.planId,
+    rationale: `Client removed a criterion (${critId}) from the draft plan.`
   });
   revalidatePath(`/jobs/${plan.jobId}`);
 }
