@@ -32,10 +32,10 @@ export default async function Integrations() {
           <h3 style={{ marginBottom: ".25rem" }}>Database</h3>
           <p className="muted small" style={{ marginBottom: ".75rem" }}>Persistence layer.</p>
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <div><strong>{backend === "postgres" ? "PostgreSQL" : "File store (.data/db.json)"}</strong>
-              <div className="muted small">Set <code>DATABASE_URL</code> to use Postgres (auto-migrates + seeds). Otherwise the file store runs with zero setup.</div>
+            <div><strong>{backend === "postgres" ? "PostgreSQL" : backend === "memory" ? "In-memory (ephemeral)" : "File store (.data/db.json)"}</strong>
+              <div className="muted small">Set <code>DATABASE_URL</code> to use Postgres (auto-migrates + seeds). On serverless without a DB the app runs in-memory; locally it uses the file store — both zero-setup.</div>
             </div>
-            <span className={`badge ${backend === "postgres" ? "green" : "indigo"}`}>{backend === "postgres" ? "Postgres" : "File"}</span>
+            <span className={`badge ${backend === "postgres" ? "green" : "indigo"}`}>{backend === "postgres" ? "Postgres" : backend === "memory" ? "Memory" : "File"}</span>
           </div>
         </div>
       </div>

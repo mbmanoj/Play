@@ -57,15 +57,29 @@ export interface Repo {
 
 import { FileRepo } from "./file";
 import { PgRepo } from "./pg";
+import { MemoryRepo } from "./memory";
 
 let _repo: Repo | null = null;
 
+// Serverless hosts (Vercel/Lambda) have a read-only filesystem, so the
+// file store can't write there. Selection order:
+//   DATABASE_URL set      → Postgres (durable, production)
+//   serverless, no DB     → in-memory (zero-config demo, ephemeral)
+//   local, no DB          → file-backed (persists across restarts)
+function isServerless(): boolean {
+  return !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+}
+
 export function getRepo(): Repo {
   if (_repo) return _repo;
-  _repo = process.env.DATABASE_URL ? new PgRepo() : new FileRepo();
+  if (process.env.DATABASE_URL) _repo = new PgRepo();
+  else if (isServerless()) _repo = new MemoryRepo();
+  else _repo = new FileRepo();
   return _repo;
 }
 
-export function dbBackend(): "postgres" | "file" {
-  return process.env.DATABASE_URL ? "postgres" : "file";
+export function dbBackend(): "postgres" | "memory" | "file" {
+  if (process.env.DATABASE_URL) return "postgres";
+  if (isServerless()) return "memory";
+  return "file";
 }
