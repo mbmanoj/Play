@@ -57,7 +57,18 @@ export default async function JobPage({ params }: { params: { id: string } }) {
                     </td>
                     <td><input type="number" step="0.01" min="0" max="1" name={`weight_${c.id}`} defaultValue={c.weight} style={{ width: 80 }} /></td>
                     <td><input type="checkbox" name={`knockout_${c.id}`} defaultChecked={c.isKnockout} /></td>
-                    <td><input type="checkbox" name={`remove_${c.id}`} title="Remove this criterion on save" /></td>
+                    <td>
+                      <button
+                        name={`remove_${c.id}`}
+                        value="on"
+                        formAction={updatePlan}
+                        aria-label={`Remove "${c.label}"`}
+                        title="Remove this criterion"
+                        style={{ background: "none", border: "none", color: "#dc2626", fontSize: "1.1rem", cursor: "pointer", lineHeight: 1, padding: ".2rem .45rem" }}
+                      >
+                        ✕
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 <tr>
@@ -75,7 +86,7 @@ export default async function JobPage({ params }: { params: { id: string } }) {
               </tbody>
             </table>
             <p className="muted small" style={{ marginTop: ".4rem" }}>
-              Edit any requirement text, switch Must/Nice, tick Remove to drop a row, or fill the last row to add one — then <strong>Save edits</strong>. Renaming a requirement re-derives what the screener looks for.
+              Edit any requirement text, switch Must/Nice, click <strong>✕</strong> to remove a row, or fill the last row to add one — then <strong>Save edits</strong>. Renaming a requirement re-derives what the screener looks for.
             </p>
 
             <h3 style={{ margin: "1.5rem 0 .5rem" }}>Interview blueprint <span className="muted small">(editable)</span></h3>
