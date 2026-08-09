@@ -230,7 +230,7 @@ function findSentence(text: string, keywords: string[]): string | null {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────
-function deriveKeywords(label: string): string[] {
+export function deriveKeywords(label: string): string[] {
   const low = label.toLowerCase();
   const hits = SKILL_LEXICON.filter((s) => low.includes(s));
   if (hits.length) return Array.from(new Set(hits));

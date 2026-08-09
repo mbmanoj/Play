@@ -42,20 +42,41 @@ export default async function JobPage({ params }: { params: { id: string } }) {
           <form action={updatePlan}>
             <input type="hidden" name="planId" value={plan.planId} />
 
-            <h3 style={{ margin: "1rem 0 .5rem" }}>Criteria</h3>
+            <h3 style={{ margin: "1rem 0 .5rem" }}>Criteria <span className="muted small">(fully editable — the AI&apos;s draft is a starting point)</span></h3>
             <table>
-              <thead><tr><th>Requirement</th><th>Type</th><th>Weight</th><th>Knockout</th></tr></thead>
+              <thead><tr><th>Requirement</th><th>Type</th><th>Weight</th><th>Knockout</th><th>Remove</th></tr></thead>
               <tbody>
                 {plan.criteria.map((c) => (
                   <tr key={c.id}>
-                    <td style={{ fontWeight: 600 }}>{c.label}</td>
-                    <td><span className={`badge ${c.kind === "must_have" ? "amber" : "gray"}`}>{c.kind === "must_have" ? "Must" : "Nice"}</span></td>
+                    <td><input type="text" name={`label_${c.id}`} defaultValue={c.label} style={{ width: "100%", minWidth: 220 }} /></td>
+                    <td>
+                      <select name={`kind_${c.id}`} defaultValue={c.kind}>
+                        <option value="must_have">Must</option>
+                        <option value="nice_to_have">Nice</option>
+                      </select>
+                    </td>
                     <td><input type="number" step="0.01" min="0" max="1" name={`weight_${c.id}`} defaultValue={c.weight} style={{ width: 80 }} /></td>
                     <td><input type="checkbox" name={`knockout_${c.id}`} defaultChecked={c.isKnockout} /></td>
+                    <td><input type="checkbox" name={`remove_${c.id}`} title="Remove this criterion on save" /></td>
                   </tr>
                 ))}
+                <tr>
+                  <td><input type="text" name="new_label" placeholder="+ Add a requirement (e.g. 5+ years Python)" style={{ width: "100%", minWidth: 220 }} /></td>
+                  <td>
+                    <select name="new_kind" defaultValue="must_have">
+                      <option value="must_have">Must</option>
+                      <option value="nice_to_have">Nice</option>
+                    </select>
+                  </td>
+                  <td><input type="number" step="0.01" min="0" max="1" name="new_weight" defaultValue={0.1} style={{ width: 80 }} /></td>
+                  <td><input type="checkbox" name="new_knockout" /></td>
+                  <td />
+                </tr>
               </tbody>
             </table>
+            <p className="muted small" style={{ marginTop: ".4rem" }}>
+              Edit any requirement text, switch Must/Nice, tick Remove to drop a row, or fill the last row to add one — then <strong>Save edits</strong>. Renaming a requirement re-derives what the screener looks for.
+            </p>
 
             <h3 style={{ margin: "1.5rem 0 .5rem" }}>Interview blueprint <span className="muted small">(editable)</span></h3>
             {plan.interviewBlueprint.map((q, i) => (

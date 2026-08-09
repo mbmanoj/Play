@@ -8,7 +8,8 @@ import { logAudit } from "@/lib/audit";
 import { getAI, ACTIVE_PROVIDER } from "@/lib/ai";
 import { uid, nowISO } from "@/lib/ids";
 import { extractText, deriveSkills, guessName } from "@/lib/ingestion/parse";
-import { Job, Interview, Scorecard, ClientAction, ActionType } from "@/lib/types";
+import { deriveKeywords } from "@/lib/ai/mock";
+import { Job, Interview, Scorecard, ClientAction, ActionType, Criterion } from "@/lib/types";
 
 // ── Auth ──────────────────────────────────────────────────────────────
 export async function login() {
@@ -88,12 +89,48 @@ export async function updatePlan(formData: FormData) {
   if (!plan || plan.status !== "draft") return;
 
   plan.cutoffValue = cutoffValue;
+
+  // Edit existing criteria (label, type, weight, knockout) and collect
+  // removals. Renaming a criterion re-derives its scoring keywords, so the
+  // screener actually matches on the new requirement rather than the old one.
+  const removed: string[] = [];
   plan.criteria.forEach((c) => {
+    if (formData.get(`remove_${c.id}`) === "on") {
+      removed.push(c.id);
+      return;
+    }
+    const lbl = formData.get(`label_${c.id}`);
+    if (lbl !== null && String(lbl).trim() && String(lbl).trim() !== c.label) {
+      c.label = String(lbl).trim();
+      c.keywords = deriveKeywords(c.label);
+    }
+    const kind = formData.get(`kind_${c.id}`);
+    if (kind === "must_have" || kind === "nice_to_have") c.kind = kind;
     const w = formData.get(`weight_${c.id}`);
     const ko = formData.get(`knockout_${c.id}`);
     if (w !== null) c.weight = Math.max(0, Math.min(1, Number(w)));
     c.isKnockout = ko === "on";
   });
+  // Apply removals — but never leave a plan with zero criteria.
+  if (removed.length && removed.length < plan.criteria.length) {
+    plan.criteria = plan.criteria.filter((c) => !removed.includes(c.id));
+  }
+
+  // Add a new criterion if the blank row was filled in.
+  const newLabel = String(formData.get("new_label") || "").trim();
+  if (newLabel) {
+    const newKind = formData.get("new_kind") === "nice_to_have" ? "nice_to_have" : "must_have";
+    const nc: Criterion = {
+      id: uid("crit"),
+      label: newLabel,
+      weight: Math.max(0, Math.min(1, Number(formData.get("new_weight") || 0.1))),
+      isKnockout: formData.get("new_knockout") === "on",
+      kind: newKind,
+      keywords: deriveKeywords(newLabel)
+    };
+    plan.criteria.push(nc);
+  }
+
   plan.interviewBlueprint.forEach((q) => {
     const t = formData.get(`q_${q.id}`);
     if (t !== null && String(t) !== q.text) {
@@ -109,7 +146,7 @@ export async function updatePlan(formData: FormData) {
     action: "plan.edited",
     entityType: "plan",
     entityId: planId,
-    rationale: "Client edited criteria weights / interview questions."
+    rationale: "Client edited plan criteria (labels/type/weights/knockouts, add/remove) and/or interview questions."
   });
   revalidatePath(`/jobs/${plan.jobId}`);
 }
