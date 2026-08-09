@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getRepo } from "@/lib/db/repo";
 import { requireSession } from "@/lib/auth";
 import Stages from "@/components/Stages";
-import { updatePlan, approvePlan, runScreening } from "@/app/actions";
+import { updatePlan, approvePlan, runScreening, removeCriterion } from "@/app/actions";
 
 export default async function JobPage({ params }: { params: { id: string } }) {
   await requireSession();
@@ -59,9 +59,7 @@ export default async function JobPage({ params }: { params: { id: string } }) {
                     <td><input type="checkbox" name={`knockout_${c.id}`} defaultChecked={c.isKnockout} /></td>
                     <td>
                       <button
-                        name={`remove_${c.id}`}
-                        value="on"
-                        formAction={updatePlan}
+                        formAction={removeCriterion.bind(null, plan.planId, c.id)}
                         aria-label={`Remove "${c.label}"`}
                         title="Remove this criterion"
                         style={{ background: "none", border: "none", color: "#dc2626", fontSize: "1.1rem", cursor: "pointer", lineHeight: 1, padding: ".2rem .45rem" }}
