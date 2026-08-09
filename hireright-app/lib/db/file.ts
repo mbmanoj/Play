@@ -13,18 +13,28 @@ const DB_PATH = path.join(DATA_DIR, "db.json");
 
 export class FileRepo implements Repo {
   private cache: DB | null = null;
+  private mtimeMs = 0;
 
+  // Re-read from disk whenever the file has changed since we last read it.
+  // Next.js can instantiate this module more than once (server actions vs.
+  // RSC renders in dev, separate bundles), so a write from one instance must
+  // be visible to reads from another — otherwise a just-created job 404s.
   private load(): DB {
-    if (this.cache) return this.cache;
     if (fs.existsSync(DB_PATH)) {
-      const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as DB;
-      // Backfill arrays added after a store was first written, so older
-      // db.json files keep working across upgrades.
-      db.candidateUsers ??= [];
-      db.applications ??= [];
-      db.mockInterviews ??= [];
-      this.cache = db;
-    } else {
+      const { mtimeMs } = fs.statSync(DB_PATH);
+      if (!this.cache || mtimeMs !== this.mtimeMs) {
+        const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8")) as DB;
+        // Backfill arrays added after a store was first written, so older
+        // db.json files keep working across upgrades.
+        db.candidateUsers ??= [];
+        db.applications ??= [];
+        db.mockInterviews ??= [];
+        this.cache = db;
+        this.mtimeMs = mtimeMs;
+      }
+      return this.cache;
+    }
+    if (!this.cache) {
       this.cache = seedDB();
       this.persist();
     }
@@ -34,6 +44,7 @@ export class FileRepo implements Repo {
   private persist() {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(DB_PATH, JSON.stringify(this.cache, null, 2), "utf8");
+    this.mtimeMs = fs.statSync(DB_PATH).mtimeMs; // don't re-read our own write
   }
 
   private mutate<T>(fn: (db: DB) => T): T {
