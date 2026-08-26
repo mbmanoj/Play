@@ -27,12 +27,12 @@ describe("M8 matching — marketplace visibility", () => {
 });
 
 describe("M8 matching — skill overlap score", () => {
-  it("derives job skills from the JD", () => {
+  it("derives canonical job skills from the JD", () => {
     const skills = jobSkills(job());
-    expect(skills).toContain("python");
-    expect(skills).toContain("aws");
-    expect(skills).toContain("microservices");
-    expect(skills).not.toContain("rust");
+    expect(skills).toContain("Python");
+    expect(skills).toContain("AWS");
+    expect(skills).toContain("Microservices");
+    expect(skills).not.toContain("Rust");
   });
 
   it("scores a perfect overlap at 100 and a disjoint candidate at 0", () => {
@@ -44,8 +44,8 @@ describe("M8 matching — skill overlap score", () => {
   });
 
   it("reports matched and missing skills, and score is monotonic in coverage", () => {
-    const partial = matchJob(["python", "aws"], job());
-    expect(partial.matched.sort()).toEqual(["aws", "python"]);
+    const partial = matchJob(["python", "aws"], job()); // aliases normalize to canonical
+    expect(partial.matched.sort()).toEqual(["AWS", "Python"]);
     expect(partial.score).toBeGreaterThan(0);
     expect(partial.score).toBeLessThan(100);
     // Adding a matching skill never lowers the score.
@@ -56,7 +56,7 @@ describe("M8 matching — skill overlap score", () => {
   it("matching reads skills only — no demographic input exists in the signature", () => {
     // Structural guarantee: matchJob takes (string[], Job). There is no channel
     // for demographics to influence a candidate's marketplace ranking.
-    expect(skillsInText("Python and React expert")).toContain("python");
+    expect(skillsInText("Python and React expert")).toContain("Python");
   });
 });
 

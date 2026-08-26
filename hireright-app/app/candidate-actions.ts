@@ -5,7 +5,8 @@ import { getRepo } from "@/lib/db/repo";
 import { uid, nowISO } from "@/lib/ids";
 import { logAudit } from "@/lib/audit";
 import { getCandidate, setCandidateSession, clearCandidateSession } from "@/lib/candidate-auth";
-import { skillsInText, isOpen } from "@/lib/matching";
+import { isOpen } from "@/lib/matching";
+import { getAI } from "@/lib/ai";
 import { practiceQuestions, coachAnswer, overall } from "@/lib/practice";
 import { CandidateUser, Candidate, Application, MockInterview, MockTurn } from "@/lib/types";
 
@@ -32,7 +33,7 @@ export async function candidateRegister(formData: FormData): Promise<void> {
     name,
     email,
     resumeText,
-    skills: skillsInText(resumeText),
+    skills: await getAI().extractSkills(resumeText),
     createdAt: nowISO()
   };
   await repo.createCandidateUser(me);
@@ -49,7 +50,7 @@ export async function updateResume(formData: FormData): Promise<void> {
   const me = await getCandidate();
   if (!me) redirect("/portal");
   const resumeText = String(formData.get("resumeText") || "").trim();
-  await getRepo().saveCandidateUser({ ...me, resumeText, skills: skillsInText(resumeText) });
+  await getRepo().saveCandidateUser({ ...me, resumeText, skills: await getAI().extractSkills(resumeText) });
   redirect("/portal/profile?saved=1");
 }
 

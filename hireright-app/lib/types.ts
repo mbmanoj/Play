@@ -30,6 +30,7 @@ export interface Job {
   title: string;
   jdText: string;
   stage: JobStage;
+  skills?: string[]; // canonical skills extracted from the JD (LLM-owned, taxonomy-normalized)
   createdAt: string;
   createdBy: string;
 }
