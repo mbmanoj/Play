@@ -22,6 +22,9 @@ export interface ScoreResult {
 
 export interface AIProvider {
   generatePlan(job: Job): Promise<ClosurePlan>;
+  // Extract the concrete skills/technologies from free text (JD or résumé),
+  // normalized to the canonical taxonomy. LLM-owned; deterministic fallback.
+  extractSkills(text: string): Promise<string[]>;
   rankCandidates(plan: ClosurePlan, candidates: Candidate[]): Promise<RankedCandidate[]>;
   // M5: conduct an async (email-style) first-round interview → transcript.
   conductInterview(plan: ClosurePlan, candidate: Candidate): Promise<TranscriptTurn[]>;

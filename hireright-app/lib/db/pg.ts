@@ -45,9 +45,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   title      text NOT NULL,
   jd_text    text NOT NULL,
   stage      text NOT NULL,
+  skills     jsonb,
   created_at timestamptz NOT NULL,
   created_by text NOT NULL
 );
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS skills jsonb;
 CREATE TABLE IF NOT EXISTS plans (
   plan_id    text PRIMARY KEY,
   job_id     text NOT NULL REFERENCES jobs(id),
@@ -194,9 +196,9 @@ export class PgRepo implements Repo {
 
   private async insertJob(job: Job): Promise<void> {
     await this.pool.query(
-      `INSERT INTO jobs(id,client_id,title,jd_text,stage,created_at,created_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
-      [job.id, job.clientId, job.title, job.jdText, job.stage, job.createdAt, job.createdBy]
+      `INSERT INTO jobs(id,client_id,title,jd_text,stage,skills,created_at,created_by)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
+      [job.id, job.clientId, job.title, job.jdText, job.stage, JSON.stringify(job.skills ?? []), job.createdAt, job.createdBy]
     );
   }
 
@@ -240,7 +242,8 @@ export class PgRepo implements Repo {
       users: users.rows.map((r) => ({ id: r.id, clientId: r.client_id, name: r.name, email: r.email, role: r.role as Role })),
       jobs: jobs.rows.map((r) => ({
         id: r.id, clientId: r.client_id, title: r.title, jdText: r.jd_text,
-        stage: r.stage as JobStage, createdAt: new Date(r.created_at).toISOString(), createdBy: r.created_by
+        stage: r.stage as JobStage, skills: r.skills || undefined,
+        createdAt: new Date(r.created_at).toISOString(), createdBy: r.created_by
       })),
       plans: plans.rows.map((r) => r.data as ClosurePlan),
       candidates: candidates.rows.map((r) => ({

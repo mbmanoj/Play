@@ -10,6 +10,12 @@ import {
   CompetencyScore
 } from "../types";
 import { uid, nowISO } from "../ids";
+import { extractSkillsFromText, keywordsFor } from "../skills";
+
+// M8: deterministic skill extraction (no-key fallback), canonical + word-boundary.
+export async function extractSkills(text: string): Promise<string[]> {
+  return extractSkillsFromText(text);
+}
 
 // ── Mocked AI ─────────────────────────────────────────────────────────
 // Deterministic stand-in for an LLM. It does genuine keyword/skill matching
@@ -60,17 +66,20 @@ export async function generatePlan(job: Job): Promise<ClosurePlan> {
   }
 
   if (mustHaves.length === 0 && niceToHaves.length === 0) {
-    const hits = SKILL_LEXICON.filter((s) => job.jdText.toLowerCase().includes(s));
-    hits.slice(0, 5).forEach((h) =>
-      mustHaves.push({
-        id: uid("crit"),
-        label: `Experience with ${h}`,
-        weight: 0,
-        isKnockout: false,
-        kind: "must_have",
-        keywords: [h]
-      })
-    );
+    // Fallback for JDs without parseable bullets: canonical skills only
+    // (word-boundary matched — no "data"/"mentor" noise, no Django→Go).
+    extractSkillsFromText(job.jdText)
+      .slice(0, 5)
+      .forEach((h) =>
+        mustHaves.push({
+          id: uid("crit"),
+          label: `Experience with ${h}`,
+          weight: 0,
+          isKnockout: false,
+          kind: "must_have",
+          keywords: keywordsFor(h)
+        })
+      );
   }
 
   assignWeights(mustHaves, 0.7);

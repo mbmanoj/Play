@@ -1,4 +1,5 @@
 import { DB, Candidate, Job } from "./types";
+import { extractSkillsFromText } from "./skills";
 
 // ── Demo seed data ────────────────────────────────────────────────────
 // Eight sample candidate resumes (plain text) so the app has a pool to
@@ -19,22 +20,12 @@ function cand(
     source: "seed",
     fileName: `${name.toLowerCase().replace(/\s+/g, "_")}.txt`,
     resumeText,
-    skills: extractSkills(resumeText),
+    skills: extractSkillsFromText(resumeText),
     ingestedAt: new Date("2026-06-01T09:00:00Z").toISOString(),
     demographics
   };
 }
 
-function extractSkills(text: string): string[] {
-  const known = [
-    "python", "java", "typescript", "javascript", "react", "node", "sql",
-    "postgres", "aws", "gcp", "kubernetes", "docker", "go", "rust",
-    "machine learning", "llm", "nlp", "data", "fastapi", "django",
-    "graphql", "terraform", "ci/cd", "rest", "microservices"
-  ];
-  const lower = text.toLowerCase();
-  return known.filter((k) => lower.includes(k));
-}
 
 const CANDIDATES: Candidate[] = [
   cand(
@@ -188,6 +179,7 @@ const JOBS: Job[] = [
     title: "Senior Backend Engineer",
     jdText: SAMPLE_JD,
     stage: "SCREENING",
+    skills: extractSkillsFromText(SAMPLE_JD),
     createdAt: new Date("2026-06-02T09:00:00Z").toISOString(),
     createdBy: "user_demo"
   },
@@ -197,6 +189,7 @@ const JOBS: Job[] = [
     title: "Frontend Engineer",
     jdText: FRONTEND_JD,
     stage: "SCREENING",
+    skills: extractSkillsFromText(FRONTEND_JD),
     createdAt: new Date("2026-06-03T09:00:00Z").toISOString(),
     createdBy: "user_demo"
   }

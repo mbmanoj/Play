@@ -11,6 +11,7 @@ import {
   CompetencyScore
 } from "../types";
 import { uid, nowISO } from "../ids";
+import { normalizeSkills } from "../skills";
 import * as mock from "./mock";
 
 // ── Real AI provider (Claude) ─────────────────────────────────────────
@@ -203,6 +204,30 @@ interface RankDraft {
   knockoutFailures: string[];
   gaps: string[];
   summary: string;
+}
+
+// ── Skill extraction (M8) ─────────────────────────────────────────────
+const SKILLS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["skills"],
+  properties: { skills: { type: "array", items: { type: "string" } } }
+};
+
+export async function extractSkills(text: string): Promise<string[]> {
+  try {
+    const draft = await structured<{ skills: string[] }>(
+      "Extract the concrete, evaluable skills and technologies from the text (programming languages, frameworks, tools, platforms, and specific practices like CI/CD or system design). Return canonical short names (e.g. 'Kubernetes' not 'k8s', 'JavaScript' not 'JS'). Include a skill only if the text actually calls for it — do not invent. Omit generic filler ('team', 'data', 'passion'). Return 3–20 items.",
+      text,
+      SKILLS_SCHEMA,
+      2000
+    );
+    const skills = normalizeSkills(draft.skills || []);
+    return skills.length ? skills : mock.extractSkills(text);
+  } catch (e) {
+    console.warn("[ai] anthropic extractSkills failed, using mock:", (e as Error).message);
+    return mock.extractSkills(text);
+  }
 }
 
 export async function rankCandidates(

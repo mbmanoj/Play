@@ -36,6 +36,7 @@ export async function createJob(formData: FormData) {
     title,
     jdText,
     stage: "JD_UPLOADED",
+    skills: await getAI().extractSkills(jdText), // LLM-owned, taxonomy-normalized
     createdAt: nowISO(),
     createdBy: user.id
   };
