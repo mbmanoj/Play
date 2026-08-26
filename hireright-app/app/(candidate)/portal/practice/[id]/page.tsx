@@ -91,7 +91,7 @@ export default async function Practice({
             />
           </div>
         ))}
-        <button className="btn">Get my coaching →</button>
+        <button className="btn">Get coaching</button>
       </form>
     </>
   );

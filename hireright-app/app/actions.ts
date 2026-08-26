@@ -260,6 +260,7 @@ export async function advanceCandidate(jobId: string, candidateId: string) {
     await repo.addOutbox({
       id: uid("msg"),
       clientId: user.clientId,
+      candidateId: cand.id,
       to: `${cand.name} <candidate@example.com>`,
       subject: `Interview invite — ${job.title}`,
       body: `Hi ${cand.name},\n\nYou've been shortlisted for ${job.title} at ${db.clients.find((c) => c.id === user.clientId)?.name}. We'd like to run a short first-round interview by email. Reply to begin — the interview is conducted by an AI assistant on the hiring team's behalf.`,
@@ -366,6 +367,7 @@ export async function triggerAction(jobId: string, candidateId: string, type: Ac
   await repo.addOutbox({
     id: uid("msg"),
     clientId: user.clientId,
+    candidateId: cand.id,
     to: `${cand.name} <candidate@example.com>`,
     subject: type === "send_email" ? `Next steps — ${job.title}` : `Interview scheduling — ${job.title}`,
     body:

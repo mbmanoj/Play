@@ -102,7 +102,7 @@ export default async function JobPage({ params }: { params: { id: string } }) {
 
             <div className="row">
               <button className="btn secondary" formAction={updatePlan}>Save edits</button>
-              <button className="btn green" formAction={approvePlan}>✓ Approve plan (Gate 1)</button>
+              <button className="btn green" formAction={approvePlan}>✓ Approve plan</button>
             </div>
             <p className="muted small" style={{ marginTop: ".5rem" }}>
               Approving locks this plan version (immutable) and unlocks screening.
@@ -124,7 +124,7 @@ export default async function JobPage({ params }: { params: { id: string } }) {
           </ul>
           {job.stage === "PLAN_APPROVED" ? (
             <form action={runScreening.bind(null, job.id)}>
-              <button className="btn">Run screening → rank candidates</button>
+              <button className="btn">Run screening</button>
             </form>
           ) : (
             <Link className="btn green" href={`/jobs/${job.id}/shortlist`}>View shortlist →</Link>
