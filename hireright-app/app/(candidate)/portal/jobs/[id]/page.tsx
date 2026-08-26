@@ -60,7 +60,7 @@ export default async function RoleDetail({ params }: { params: { id: string } })
                   Applying shares your resume with {clientName}&apos;s hiring team and enters you into their AI screening.
                 </p>
                 <form action={applyToJob.bind(null, job.id)}>
-                  <button className="btn" style={{ width: "100%", justifyContent: "center" }}>Apply to this role</button>
+                  <button className="btn" style={{ width: "100%", justifyContent: "center" }}>Apply</button>
                 </form>
               </>
             )}

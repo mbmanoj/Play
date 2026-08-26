@@ -116,14 +116,16 @@ CREATE TABLE IF NOT EXISTS actions (
   triggered_at timestamptz NOT NULL
 );
 CREATE TABLE IF NOT EXISTS outbox (
-  id         text PRIMARY KEY,
-  client_id  text NOT NULL,
-  recipient  text NOT NULL,
-  subject    text NOT NULL,
-  body       text NOT NULL,
-  kind       text NOT NULL,
-  created_at timestamptz NOT NULL
+  id           text PRIMARY KEY,
+  client_id    text NOT NULL,
+  candidate_id text,
+  recipient    text NOT NULL,
+  subject      text NOT NULL,
+  body         text NOT NULL,
+  kind         text NOT NULL,
+  created_at   timestamptz NOT NULL
 );
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS candidate_id text;
 CREATE TABLE IF NOT EXISTS candidate_users (
   id          text PRIMARY KEY,
   name        text NOT NULL,
@@ -268,8 +270,8 @@ export class PgRepo implements Repo {
         triggeredAt: new Date(r.triggered_at).toISOString()
       })),
       outbox: outbox.rows.map((r) => ({
-        id: r.id, clientId: r.client_id, to: r.recipient, subject: r.subject, body: r.body,
-        kind: r.kind, createdAt: new Date(r.created_at).toISOString()
+        id: r.id, clientId: r.client_id, candidateId: r.candidate_id || undefined, to: r.recipient,
+        subject: r.subject, body: r.body, kind: r.kind, createdAt: new Date(r.created_at).toISOString()
       })),
       candidateUsers: candidateUsers.rows.map((r) => ({
         id: r.id, name: r.name, email: r.email, resumeText: r.resume_text,
@@ -389,8 +391,8 @@ export class PgRepo implements Repo {
   async addOutbox(m: OutboxMessage): Promise<void> {
     await this.init();
     await this.pool.query(
-      `INSERT INTO outbox(id,client_id,recipient,subject,body,kind,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)`,
-      [m.id, m.clientId, m.to, m.subject, m.body, m.kind, m.createdAt]
+      `INSERT INTO outbox(id,client_id,candidate_id,recipient,subject,body,kind,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [m.id, m.clientId, m.candidateId ?? null, m.to, m.subject, m.body, m.kind, m.createdAt]
     );
   }
 

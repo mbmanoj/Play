@@ -174,6 +174,7 @@ export interface ClientAction {
 export interface OutboxMessage {
   id: string;
   clientId: string;
+  candidateId?: string; // which candidate this draft is for (listed on their page)
   to: string;
   subject: string;
   body: string;

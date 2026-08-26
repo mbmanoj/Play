@@ -25,7 +25,7 @@ export default function NewJobForm({ sampleJd }: { sampleJd: string }) {
           placeholder="Paste the job description here…" required />
       </div>
       <button className="btn" disabled={busy}>
-        {busy ? "Generating plan…" : "Upload JD → generate hiring plan"}
+        {busy ? "Generating…" : "Generate plan"}
       </button>
     </form>
   );
