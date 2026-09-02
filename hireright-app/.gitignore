@@ -4,3 +4,8 @@ node_modules
 *.tsbuildinfo
 next-env.d.ts
 .env.local
+
+# Real-resume test corpus — fetched on demand via
+# `node scripts/fetch-real-resumes.mjs`. Contains real people's PII
+# (names, emails, phone numbers); never commit it.
+test-data/real-resumes/

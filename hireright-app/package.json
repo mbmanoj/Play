@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "resumes:fetch": "node scripts/fetch-real-resumes.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.68.0",
