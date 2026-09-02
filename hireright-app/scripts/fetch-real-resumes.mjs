@@ -5,10 +5,15 @@
 // scanned pages, weird encodings) instead of hand-written fixtures.
 //
 //   node scripts/fetch-real-resumes.mjs [--count=75] [--force]
+//   node scripts/fetch-real-resumes.mjs --labeled        # +220 annotated
+//   node scripts/fetch-real-resumes.mjs --bulk=2000      # +89 MB download
+//   node scripts/fetch-real-resumes.mjs --all
 //
 // Output: test-data/real-resumes/  (gitignored — see PRIVACY below)
-//   docs/   real PDF/DOCX/DOC files as published by their authors
-//   text/   plain-text resumes materialized from a public CSV dataset
+//   docs/    real PDF/DOCX/DOC files as published by their authors
+//   text/    plain-text resumes materialized from a public CSV dataset
+//   labeled/ resumes with human-annotated Name/Skills/etc. ground truth
+//   bulk/    sample of a 29,783-resume labelled corpus, for scale runs
 //   MANIFEST.json  provenance + sha256 for every file written
 //
 // PRIVACY: these are real people's resumes and contain real names, emails
@@ -18,6 +23,7 @@
 
 import { createHash } from "node:crypto";
 import { mkdir, writeFile, readFile, access } from "node:fs/promises";
+import { inflateRawSync } from "node:zlib";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -76,13 +82,37 @@ const CSV = {
   license: "CC0 (Kaggle: gauravduttakiit/resume-dataset)"
 };
 
+// 220 resumes with human-annotated entities (Name, Email Address, Skills,
+// Designation, College Name, ...). Ground truth — the only source here that
+// can measure extraction ACCURACY rather than just "did it not throw".
+const LABELED = {
+  repo: "DataTurks-Engg/Entity-Recognition-In-Resumes-SpaCy",
+  sha: "3a8b01ed8e60048485d4ae6a3bf577b9393f1d84",
+  files: ["traindata.json", "testdata.json"],
+  license: "public dataset — 220 resumes annotated via DataTurks"
+};
+
+// 29,783 real resumes scraped from Indeed, each with job-title labels.
+// 89 MB zip, so opt-in: the corpus is for scale/regression runs, not CI.
+const BULK = {
+  repo: "florex/resume_corpus",
+  sha: "24de39957d99caf2c89cf384ba2396bafe16050d",
+  file: "resumes_corpus.zip",
+  license: "research corpus (Ngoungoure Mfenjou et al.) — labelled resumes"
+};
+
 const args = process.argv.slice(2);
 const flag = (n, d) => {
   const a = args.find((x) => x.startsWith(`--${n}=`));
   return a ? a.split("=")[1] : d;
 };
+const has = (n) => args.some((x) => x === `--${n}` || x.startsWith(`--${n}=`));
 const FORCE = args.includes("--force");
+const ALL = args.includes("--all");
 const COUNT = Number(flag("count", 75));
+const LABELED_ON = ALL || has("labeled");
+const BULK_ON = ALL || has("bulk");
+const BULK_COUNT = Number(flag("bulk", 2000)) || 2000;
 
 function rawUrl(repo, sha, file) {
   return `${RAW}/${repo}/${sha}/${file.split("/").map(encodeURIComponent).join("/")}`;
@@ -130,6 +160,79 @@ function parseCsv(text) {
   }
   if (field.length || row.length) { row.push(field); rows.push(row); }
   return rows;
+}
+
+/**
+ * Minimal ZIP support (store + deflate, no zip64) so the bulk corpus needs no
+ * dependency and no `unzip` on PATH. The archive holds 59k members, so the
+ * central directory is walked once and only selected entries are inflated.
+ */
+function* centralDirectory(buf) {
+  // End of central directory: signature 0x06054b50, scan back over the comment.
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= 0 && i > buf.length - 22 - 0xffff; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("not a zip file (no end-of-central-directory)");
+
+  const total = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  for (let i = 0; i < total; i++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error("corrupt central directory");
+    const nameLen = buf.readUInt16LE(p + 28);
+    const entry = {
+      name: buf.toString("utf8", p + 46, p + 46 + nameLen),
+      method: buf.readUInt16LE(p + 10),
+      compressedSize: buf.readUInt32LE(p + 20),
+      localOffset: buf.readUInt32LE(p + 42)
+    };
+    p += 46 + nameLen + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+    yield entry;
+  }
+}
+
+function zipNames(buf) {
+  const names = [];
+  for (const e of centralDirectory(buf)) names.push(e.name);
+  return names;
+}
+
+function unzip(buf, want) {
+  const out = new Map();
+  for (const e of centralDirectory(buf)) {
+    if (!want(e.name)) continue;
+    // Local header lengths differ from the central ones — re-read them.
+    const start =
+      e.localOffset + 30 + buf.readUInt16LE(e.localOffset + 26) + buf.readUInt16LE(e.localOffset + 28);
+    const raw = buf.subarray(start, start + e.compressedSize);
+    out.set(e.name, e.method === 0 ? Buffer.from(raw) : inflateRawSync(raw));
+  }
+  return out;
+}
+
+// The bulk corpus was scraped from rendered search results, so hit terms are
+// wrapped in <span class="hl">. Strip the markup an ingester would never see.
+function stripScraperMarkup(s) {
+  return s
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/[^\S\n]+/g, " ")
+    .trim();
+}
+
+/** Deterministic shuffle so `--bulk=N` picks the same N on every machine. */
+function sampleStable(items, n, seed = 1337) {
+  const a = [...items];
+  let s = seed;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const j = s % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
 }
 
 async function main() {
@@ -217,12 +320,95 @@ async function main() {
     fetched++;
   }
 
+  // ── annotated corpus (ground truth for accuracy measurement) ────────
+  let labeledCount = 0;
+  if (LABELED_ON) {
+    const dir = path.join(OUT, "labeled");
+    await mkdir(dir, { recursive: true });
+    manifest.sources.push({ repo: LABELED.repo, sha: LABELED.sha, license: LABELED.license });
+    for (const file of LABELED.files) {
+      const cache = path.join(OUT, `.cache-${file}`);
+      let raw;
+      if (!FORCE && (await exists(cache))) raw = await readFile(cache);
+      else {
+        raw = await download(rawUrl(LABELED.repo, LABELED.sha, file));
+        await writeFile(cache, raw);
+      }
+      // JSON Lines: one annotated resume per line.
+      for (const line of raw.toString("utf8").split("\n")) {
+        if (!line.trim()) continue;
+        const rec = JSON.parse(line);
+        const content = rec.content ?? "";
+        if (content.length < 200) continue;
+        const entities = {};
+        for (const a of rec.annotation ?? []) {
+          for (const label of a.label ?? []) {
+            for (const pt of a.points ?? []) {
+              const t = (pt.text ?? "").trim();
+              if (t) (entities[label] ??= new Set()).add(t);
+            }
+          }
+        }
+        labeledCount++;
+        const base = `resume-${String(labeledCount).padStart(3, "0")}`;
+        const body = Buffer.from(content, "utf8");
+        await writeFile(path.join(dir, `${base}.txt`), body);
+        await writeFile(
+          path.join(dir, `${base}.entities.json`),
+          JSON.stringify(Object.fromEntries(Object.entries(entities).map(([k, v]) => [k, [...v].sort()])), null, 1) + "\n"
+        );
+        manifest.files.push({ path: `labeled/${base}.txt`, repo: LABELED.repo, bytes: body.length, sha256: sha256(body) });
+      }
+    }
+    console.log(`  ✓ labeled/ ${labeledCount} resumes with annotated ground truth`);
+  }
+
+  // ── bulk corpus (scale + regression runs) ───────────────────────────
+  let bulkCount = 0;
+  if (BULK_ON) {
+    const dir = path.join(OUT, "bulk");
+    await mkdir(dir, { recursive: true });
+    manifest.sources.push({ repo: BULK.repo, sha: BULK.sha, license: BULK.license });
+    const cache = path.join(OUT, `.cache-${BULK.file}`);
+    let zip;
+    if (!FORCE && (await exists(cache))) zip = await readFile(cache);
+    else {
+      console.log(`  … downloading ${BULK.file} (~89 MB, one time)`);
+      zip = await download(rawUrl(BULK.repo, BULK.sha, BULK.file));
+      await writeFile(cache, zip);
+    }
+
+    // Two passes: list the members from the central directory cheaply, then
+    // inflate only the sampled slice rather than all 29,783.
+    const allTxt = zipNames(zip).filter((n) => n.endsWith(".txt")).sort();
+    const picked = new Set(sampleStable(allTxt, Math.min(BULK_COUNT, allTxt.length)));
+    const wanted = new Set([...picked, ...[...picked].map((n) => n.replace(/\.txt$/, ".lab"))]);
+    const entries = unzip(zip, (n) => wanted.has(n));
+
+    const labels = {};
+    for (const name of [...picked].sort()) {
+      const body = stripScraperMarkup(entries.get(name)?.toString("utf8") ?? "");
+      if (body.length < 200) continue; // the corpus contains a few empty rows
+      const base = path.basename(name, ".txt");
+      const buf = Buffer.from(body, "utf8");
+      await writeFile(path.join(dir, `${base}.txt`), buf);
+      labels[base] = (entries.get(name.replace(/\.txt$/, ".lab"))?.toString("utf8") ?? "")
+        .split("\n").map((l) => l.trim()).filter(Boolean);
+      bulkCount++;
+    }
+    await writeFile(path.join(dir, "_labels.json"), JSON.stringify(labels, null, 0) + "\n");
+    manifest.files.push({ path: `bulk/ (${bulkCount} files)`, repo: BULK.repo, sampledFrom: allTxt.length });
+    console.log(`  ✓ bulk/ ${bulkCount} resumes sampled from ${allTxt.length}`);
+  }
+
   await writeFile(path.join(OUT, "MANIFEST.json"), JSON.stringify(manifest, null, 2) + "\n");
 
   console.log(
     `\nreal-resume corpus → ${path.relative(ROOT, OUT)}\n` +
       `  documents (pdf/docx/doc): ${manifest.files.filter((f) => f.path.startsWith("docs/")).length}\n` +
       `  text resumes:             ${picked.length} across ${perCat.size} job categories\n` +
+      (LABELED_ON ? `  annotated (ground truth): ${labeledCount}\n` : `  annotated:                — (pass --labeled)\n`) +
+      (BULK_ON ? `  bulk corpus:              ${bulkCount}\n` : `  bulk corpus:              — (pass --bulk)\n`) +
       `  fetched ${fetched}, cached ${cached}, failed ${failed}\n` +
       `\nReal PII inside — gitignored, local test input only. Do not redistribute.\n`
   );

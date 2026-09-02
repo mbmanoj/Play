@@ -11,17 +11,29 @@ get exercised against documents people actually sent to recruiters.
 ```bash
 cd hireright-app
 node scripts/fetch-real-resumes.mjs          # ~4 MB, ~100 files
-node scripts/fetch-real-resumes.mjs --count=200 --force
+node scripts/fetch-real-resumes.mjs --labeled   # + 220 annotated resumes
+node scripts/fetch-real-resumes.mjs --bulk=2000 # + 89 MB one-time download
+node scripts/fetch-real-resumes.mjs --all
 npm test                                     # test/real-resumes.test.ts now runs
 ```
 
 Output lands in `test-data/real-resumes/`:
 
-| path            | what                                                       |
-| --------------- | ---------------------------------------------------------- |
-| `docs/`         | 22 real PDF / DOCX / DOC resumes, exactly as published      |
-| `text/`         | 75 plain-text resumes (default) spanning 25 job categories  |
-| `MANIFEST.json` | provenance + sha256 for every file written                  |
+| path            | what                                                            |
+| --------------- | --------------------------------------------------------------- |
+| `docs/`         | 22 real PDF / DOCX / DOC resumes, exactly as published           |
+| `text/`         | 75 plain-text resumes (default) spanning 25 job categories       |
+| `labeled/`      | 220 resumes + human-annotated `.entities.json` ground truth      |
+| `bulk/`         | N resumes sampled from a 29,783-resume labelled corpus           |
+| `MANIFEST.json` | provenance + sha256 for every file written                       |
+
+Each tier is gated separately in the test file, so `--labeled` and `--bulk`
+stay optional — the base corpus is enough to run `npm test`.
+
+Downloads are cached as `.cache-*` next to the output so re-runs are free;
+`--force` re-fetches. Disk: ~7 MB for the base corpus, ~115 MB with `--all`
+(the 89 MB bulk zip is kept so `--bulk=N` can be re-sampled offline — delete
+`.cache-resumes_corpus.zip` to reclaim it).
 
 The corpus is **gitignored**. `test/real-resumes.test.ts` skips itself when the
 corpus is absent, so CI and fresh clones stay green without it.
@@ -50,20 +62,68 @@ script dedupes it (the raw dataset repeats many resumes verbatim) and picks
 round-robin across categories, so even a small `--count` spans Java Developer,
 Testing, DevOps, HR, Sales, Advocate, Civil Engineer, and the rest.
 
-### Bigger corpora, if 100 files isn't enough
+### Annotated corpus — ground truth for accuracy (`--labeled`)
 
-Not wired into the script — reach for these when you need volume:
+[DataTurks-Engg/Entity-Recognition-In-Resumes-SpaCy](https://github.com/DataTurks-Engg/Entity-Recognition-In-Resumes-SpaCy)
+(`traindata.json` + `testdata.json`) is 220 real resumes with **human-annotated
+entities**: `Name`, `Email Address`, `Skills`, `Designation`, `Companies worked
+at`, `College Name`, `Degree`, `Graduation Year`, `Location`. The fetcher writes
+each as `resume-NNN.txt` plus a `resume-NNN.entities.json` sidecar.
 
-- [florex/resume_corpus](https://github.com/florex/resume_corpus) —
-  `resumes_corpus.zip`, ~89 MB, ~29 k labelled resumes as plain text.
-- [noran-mohamed/Resume-Classification-Dataset](https://github.com/noran-mohamed/Resume-Classification-Dataset) —
-  `Dataset.csv` via Git LFS (~65 MB), resumes scraped from LiveCareer plus
-  Google/Bing Images.
-- [Kaggle: snehaanbhawal/resume-dataset](https://www.kaggle.com/datasets/snehaanbhawal/resume-dataset) —
-  2 484 resumes as **real PDFs** with matching HTML. The best PDF-layout
-  torture test available, but it needs Kaggle credentials.
-- Hugging Face mirrors (`brackozi/Resume`, `Unknown92/Resume_dataset`) carry the
-  same CSVs if GitHub is blocked in your environment.
+This is the only source here that can measure *accuracy* rather than "the
+parser didn't throw" — `test/real-resumes.test.ts` uses it to hold `guessName`
+to a 95% floor against the annotated names.
+
+### Bulk corpus — 29,783 resumes (`--bulk=N`)
+
+[florex/resume_corpus](https://github.com/florex/resume_corpus) `resumes_corpus.zip`
+(89 MB) is 29,783 real resumes scraped from Indeed, each with a `.lab` file of
+job-title labels (Software_Developer, Systems_Administrator, Project_manager,
+Security_Analyst, ...). The fetcher samples `N` of them with a fixed seed, so
+every machine gets the same slice and thresholds in the tests stay meaningful.
+
+Two ingestion hazards this corpus surfaces and the fetcher handles: the scrape
+wrapped hit terms in `<span class="hl">` markup (stripped on write), and a
+handful of entries are empty or near-empty (dropped below 200 chars).
+
+### What is NOT reachable from this environment
+
+Checked, and blocked by the session's egress policy — don't waste time on them
+from a Claude Code web session:
+
+| Source | Status |
+| ------ | ------ |
+| Kaggle (`kaggle.com`) | blocked at the proxy; also needs credentials |
+| Hugging Face (`huggingface.co`, `datasets-server.…`) | blocked at the proxy |
+| Zenodo, figshare, data.world, archive.org | blocked at the proxy |
+| Git LFS objects (e.g. [noran-mohamed/Resume-Classification-Dataset](https://github.com/noran-mohamed/Resume-Classification-Dataset) `Dataset.csv`, 65 MB) | the git proxy refuses to sign LFS requests for repos outside the session's authorized set |
+| `github.com/<owner>/<repo>/raw/...` | 403 — use `raw.githubusercontent.com` instead |
+
+`raw.githubusercontent.com` works, which is why every source above is pinned to
+a raw URL. Off this environment, the richest set is
+[Kaggle: snehaanbhawal/resume-dataset](https://www.kaggle.com/datasets/snehaanbhawal/resume-dataset)
+— 2,484 resumes as **real PDFs** with matching HTML, the best PDF-layout
+torture test available.
+
+## What the corpus found
+
+Running the real corpus through `lib/` surfaced bugs no fixture had:
+
+- **`Observability` fires on 635 of 1,993 resumes; 84% mention no observability
+  tool at all.** `lib/skills.ts` aliases `"monitoring"` → `Observability`, so
+  "SQL Monitoring" and "database monitoring/health check alert scripts" make
+  every Oracle DBA an observability engineer.
+- **`Go` fires on 128 resumes; 81% never mention the language.** The bare `"go"`
+  alias word-boundary-matches the English verb: "go live", "Go-LIVE",
+  "go-forward server requirements".
+- **`guessName` returns a non-name on 7 of 21 real PDF/DOCX files** —
+  `"PERSONAL PARTICULARS"`, `"Curriculum Vitae"`, `"180517 Vasanthi Kasinathan"`,
+  `"PWC Olivia Peter Regulatory Manager"`. It scores 100% on plain-text resumes,
+  which is exactly why fixtures never caught it.
+
+The first two are pinned by characterization tests marked `KNOWN BUG` in
+`test/real-resumes.test.ts` — fixing `lib/skills.ts` will trip them, which is
+the point: flip them to the post-fix rate deliberately.
 
 ## Privacy
 

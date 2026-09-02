@@ -130,3 +130,137 @@ suite("real resumes — text corpus (962-resume public dataset)", () => {
     }
   });
 });
+
+// ── Annotated corpus: accuracy, not just "it didn't throw" ────────────
+// 220 resumes with human-annotated Name / Email Address / Skills / etc.
+// Fetch with: node scripts/fetch-real-resumes.mjs --labeled
+
+const LABELED = path.join(CORPUS, "labeled");
+const labeledPresent = existsSync(LABELED);
+const labeled = labeledPresent
+  ? readdirSync(LABELED).filter((f) => f.endsWith(".txt")).sort()
+  : [];
+const labeledSuite = labeledPresent ? describe : describe.skip;
+
+type Entities = Record<string, string[]>;
+const entitiesOf = (file: string): Entities =>
+  JSON.parse(readFileSync(path.join(LABELED, file.replace(/\.txt$/, ".entities.json")), "utf8"));
+
+labeledSuite("real resumes — accuracy vs. human annotations", () => {
+  it("has the annotated corpus", () => {
+    expect(labeled.length).toBeGreaterThanOrEqual(200);
+  });
+
+  it("guessName matches the annotated candidate name on almost every resume", () => {
+    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+    let scored = 0;
+    let hit = 0;
+    const misses: string[] = [];
+
+    for (const file of labeled) {
+      const truth = entitiesOf(file)["Name"] ?? [];
+      if (!truth.length) continue;
+      scored++;
+      const got = norm(guessName(file, readFileSync(path.join(LABELED, file), "utf8")));
+      const ok = truth.some((t) => {
+        const want = norm(t);
+        return want === got || got.includes(want) || want.includes(got);
+      });
+      if (ok) hit++;
+      else misses.push(`${file}: got "${got}" want "${truth[0]}"`);
+    }
+
+    expect(scored).toBeGreaterThan(150);
+    // Plain-text resumes lead with the candidate's name, so the first-line
+    // heuristic should be near-perfect here. (It is NOT on PDF/DOCX, where
+    // headers and filenames intrude — see test-data/README.md.)
+    expect(hit / scored, `misses:\n${misses.slice(0, 10).join("\n")}`).toBeGreaterThan(0.95);
+  });
+
+  it("finds the annotated email address in the text it extracts", () => {
+    let scored = 0;
+    let hit = 0;
+    for (const file of labeled) {
+      const emails = entitiesOf(file)["Email Address"] ?? [];
+      if (!emails.length) continue;
+      scored++;
+      const text = readFileSync(path.join(LABELED, file), "utf8");
+      if (emails.some((e) => text.includes(e))) hit++;
+    }
+    expect(scored).toBeGreaterThan(50);
+    expect(hit).toBe(scored);
+  });
+});
+
+// ── Bulk corpus: scale + skill-extraction precision ───────────────────
+// Fetch with: node scripts/fetch-real-resumes.mjs --bulk=2000
+
+const BULK = path.join(CORPUS, "bulk");
+const bulkPresent = existsSync(BULK);
+const bulk = bulkPresent
+  ? readdirSync(BULK).filter((f) => f.endsWith(".txt")).sort()
+  : [];
+const bulkSuite = bulkPresent ? describe : describe.skip;
+
+/**
+ * For a canonical skill, the share of resumes it fired on that contain NO
+ * corroborating evidence — i.e. the extractor's false-positive rate for that
+ * skill, measured over real resumes.
+ */
+function unsupportedRate(evidence: RegExp, skill: string) {
+  let fired = 0;
+  let unsupported = 0;
+  for (const file of bulk) {
+    const text = readFileSync(path.join(BULK, file), "utf8");
+    if (!extractSkillsFromText(text).includes(skill)) continue;
+    fired++;
+    if (!evidence.test(text)) unsupported++;
+  }
+  return { fired, unsupported, rate: fired ? unsupported / fired : 0 };
+}
+
+bulkSuite("real resumes — skill extraction at scale", () => {
+  it("parses the whole corpus without a single failure", () => {
+    expect(bulk.length).toBeGreaterThanOrEqual(500);
+    for (const file of bulk) {
+      const text = readFileSync(path.join(BULK, file), "utf8");
+      const skills = extractSkillsFromText(text);
+      expect(new Set(skills).size).toBe(skills.length);
+      expect(skills.every((s) => s.length > 0 && s.trim() === s)).toBe(true);
+    }
+  }, 120_000);
+
+  it("stays fast enough to ingest a folder of thousands", () => {
+    const t0 = Date.now();
+    for (const file of bulk) extractSkillsFromText(readFileSync(path.join(BULK, file), "utf8"));
+    const perResume = (Date.now() - t0) / bulk.length;
+    expect(perResume).toBeLessThan(10); // ms — observed ~1ms
+  }, 120_000);
+
+  it("does not fire multi-character skills without evidence", () => {
+    // Guards the word-boundary matcher: these were the regressions that
+    // motivated it (django→Go, javascript→Java), and they stay clean.
+    expect(unsupportedRate(/react/i, "React").rate).toBe(0);
+    expect(unsupportedRate(/swift|ios/i, "Swift").rate).toBe(0);
+    expect(unsupportedRate(/spring boot|java/i, "Spring").rate).toBeLessThan(0.1);
+  }, 120_000);
+
+  // ── Characterization tests for two KNOWN BUGS ──────────────────────
+  // These assert today's WRONG behaviour so a fix trips them loudly. When
+  // lib/skills.ts is fixed, flip both to the low rate the fix achieves.
+
+  it("KNOWN BUG: 'monitoring' alias makes every DBA an Observability engineer", () => {
+    const r = unsupportedRate(/prometheus|grafana|datadog|opentelemetry|new relic|splunk/i, "Observability");
+    // "SQL Monitoring", "database monitoring/health check" → Observability.
+    // Fix: drop "monitoring" from the Observability aliases in lib/skills.ts.
+    expect(r.fired).toBeGreaterThan(bulk.length * 0.2);
+    expect(r.rate).toBeGreaterThan(0.5);
+  }, 120_000);
+
+  it("KNOWN BUG: bare 'Go' alias matches the English verb", () => {
+    const r = unsupportedRate(/golang|go lang|go programming/i, "Go");
+    // "go live", "Go-LIVE", "go-forward server requirements" → Go.
+    // Fix: require "golang"/"go" only in a skills-list context in lib/skills.ts.
+    expect(r.rate).toBeGreaterThan(0.5);
+  }, 120_000);
+});
