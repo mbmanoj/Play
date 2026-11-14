@@ -128,7 +128,7 @@ scalar("cni_margin", "Net margin on firm-green sales (INR per kWh)", 0.50, '0.00
 asec("3. People")
 scalar("sal_esc", "Annual salary escalation", 0.08, PCT)
 scalar("emp_cost", "Employer statutory costs (PF, gratuity, insurance) as % of salary", 0.15, PCT)
-series("founder_pay", "Founder compensation, each (INR lakh per year)", [24, 36, 60, 60, 72, 72, 84, 84, 96, 96], NUM, "2 founders. Below market until Series A.")
+series("founder_pay", "Founder compensation, each (INR lakh per year)", [48, 52, 56, 60.5, 65.3, 70.5, 76.2, 82.3, 88.8, 96], NUM, "INR 4 lakh/month each from day 1 (user input), then +8%/yr. Edit freely.")
 scalar("n_founders", "Number of founders", 2, NUM0)
 scalar("commission", "Sales commission (% of first-year revenue from new plants)", 0.05, PCT)
 scalar("recruit_pct", "Recruitment cost (% of annual salary of new hires)", 0.08, PCT)
@@ -195,7 +195,7 @@ scalar("recv_days", "Receivable days", 60, NUM0)
 scalar("pay_days", "Payable days (on opex)", 30, NUM0)
 scalar("tax_rate", "Corporate tax rate", 0.2517, PCT, "25% + surcharge & cess (new regime).")
 scalar("int_rate", "Interest income on cash balance", 0.06, PCT)
-series("equity", "Equity raised (INR lakh)", [1000, 0, 2500, 0, 0, 0, 0, 0, 0, 0], NUM0, "Seed INR 10 crore Y1, Series A INR 25 crore Y3. Adjust to the funding gap shown in Cash Flow.")
+series("equity", "Equity raised (INR lakh)", [1200, 0, 2500, 0, 0, 0, 0, 0, 0, 0], NUM0, "Seed INR 12 crore Y1, Series A INR 25 crore Y3. Adjust to the funding gap shown in Cash Flow.")
 
 # ---------------------------------------------------------------- Headcount
 H = wb.create_sheet("Headcount")
