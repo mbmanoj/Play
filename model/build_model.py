@@ -590,6 +590,108 @@ srow += 1
 S.cell(row=srow, column=1, value="10-year cumulative PAT (INR crore)").font = BOLD
 S.cell(row=srow, column=3, value=f"=SUM('Cash Flow'!C{rows_cf['pat']}:L{rows_cf['pat']})/100").number_format = NUM
 
+
+# ---------------------------------------------------------------- Plant View
+P = wb.create_sheet("Plant View")
+style_sheet(P, {"A": 62, "B": 12, **{c: 11 for c in YC}, "M": 50})
+P["A1"] = "One plant owner's cash flow — with and without our scheme (INR lakh)"; P["A1"].font = TITLE
+P["A2"] = "Reference plant: owner keeps the PPA, owns the mandated battery in both cases. Only what we change is different. Edit BLUE cells."
+P["A2"].font = Font(name="Arial", italic=True, size=10)
+prow = 4
+PREF = {}
+def p_in(name, label, value, fmt=NUM, note=None):
+    global prow
+    P.cell(row=prow, column=1, value=label).font = BLACK
+    c = P.cell(row=prow, column=2, value=value); c.font = BLUE; c.number_format = fmt
+    if note: P.cell(row=prow, column=13, value=note).font = Font(name="Arial", italic=True, size=9, color="666666")
+    PREF[name] = f"$B${prow}"; prow += 1
+section(P, prow, "Plant inputs"); prow += 1
+p_in("p_mw", "Plant capacity (MW)", 70, NUM0)
+p_in("p_cuf", "Capacity utilisation factor", 0.20, PCT, "Solar. Use 0.30 and the wind deviation rate for a wind plant.")
+p_in("p_ppa_share", "Share of capacity under fixed-price PPA", 0.80, PCT)
+p_in("p_ppa_tariff", "PPA tariff (INR per kWh)", 2.80, '0.00')
+p_in("p_base_real", "Untied power realisation today via a trader (INR per kWh)", 2.20, '0.00', "IEX solar capture rate fell to ~INR 2.23 in FY26.")
+p_in("p_dsm_rate", "Deviation charges today (INR lakh per MW per year)", 0.90, NUM, "Solar. Wind ~2.0.")
+p_in("p_batt_mw_frac", "Battery MW as share of plant MW (mandate)", 0.10, PCT)
+p_in("p_batt_hours", "Battery duration (hours)", 2, NUM0)
+p_in("p_capex_mwh", "Battery capex (INR lakh per MWh)", 90, NUM, "INR 0.9 crore/MWh landed; tender bids imply 0.7-0.8.")
+p_in("p_om_pct", "Battery O&M, insurance (% of capex per year)", 0.015, PCT)
+p_in("p_debt_pct", "Debt share of battery capex", 0.70, PCT)
+p_in("p_debt_rate", "Battery debt interest rate", 0.10, PCT)
+p_in("p_debt_yrs", "Battery debt tenor (years)", 12, NUM0)
+p_in("p_passive", "Arbitrage captured by owner's own timer-based dispatch (share of optimal)", 0.80, PCT, "Without us the battery still runs, just worse.")
+p_in("p_trader_margin", "Trader margin without us (INR per kWh of untied power)", 0.02, '0.000', "Assumed equal to our trading margin, so neutral.")
+prow += 1
+header_row(P, prow, "INR lakh"); prow += 1
+rows_p = {}
+def p_line(key, label, fn, bold=False, fmt=NUM, font=BLACK):
+    global prow
+    rows_p[key] = prow
+    P.cell(row=prow, column=1, value=label).font = BOLD if bold else BLACK
+    for i in range(YEARS):
+        c = P.cell(row=prow, column=3 + i, value=fn(i)); c.number_format = fmt; c.font = BOLD if bold else font
+    prow += 1
+def p_sec(t):
+    global prow
+    section(P, prow, t); prow += 1
+PR = PREF
+p_sec("Physical quantities")
+p_line("gen", "Generation (GWh)", lambda i: f"={PR['p_mw']}*{PR['p_cuf']}*8760/1000")
+p_line("gen_ppa", "  under PPA (GWh)", lambda i: f"={YC[i]}{rows_p['gen']}*{PR['p_ppa_share']}")
+p_line("gen_untied", "  untied (GWh)", lambda i: f"={YC[i]}{rows_p['gen']}*(1-{PR['p_ppa_share']})")
+p_line("bmwh", "Battery (MWh)", lambda i: f"={PR['p_mw']}*{PR['p_batt_mw_frac']}*{PR['p_batt_hours']}")
+p_line("bmw", "Battery (MW)", lambda i: f"={PR['p_mw']}*{PR['p_batt_mw_frac']}")
+p_line("bcapex", "Battery capex (one-time, year 1)", lambda i: f"={YC[i]}{rows_p['bmwh']}*{PR['p_capex_mwh']}" if i == 0 else "=0")
+p_line("bdebt", "Battery debt service (annuity)", lambda i: f"=IF({i}<{PR['p_debt_yrs']},-PMT({PR['p_debt_rate']},{PR['p_debt_yrs']},{YC[0]}{rows_p['bcapex']}*{PR['p_debt_pct']}),0)")
+
+p_sec("A. WITHOUT the scheme (status quo)")
+p_line("a_ppa", "PPA revenue", lambda i: f"={YC[i]}{rows_p['gen_ppa']}*10*{PR['p_ppa_tariff']}")
+p_line("a_untied", "Untied power sold via trader", lambda i: f"={YC[i]}{rows_p['gen_untied']}*10*{PR['p_base_real']}")
+p_line("a_trader", "Trader margin paid", lambda i: f"=-{YC[i]}{rows_p['gen_untied']}*10*{PR['p_trader_margin']}")
+p_line("a_dsm", "Deviation charges paid", lambda i: f"=-{PR['p_mw']}*{PR['p_dsm_rate']}*{ser('dsm_idx', i)}", font=BLACK)
+p_line("a_arb", "Battery arbitrage (own timer dispatch)", lambda i: f"={YC[i]}{rows_p['bmwh']}*{REF['arb_per_mwh']}*{ser('spread_idx', i)}*{PR['p_passive']}")
+p_line("a_grid", "Ancillary & capacity payments", lambda i: "=0")
+P.cell(row=rows_p['a_grid'], column=13, value="Assumed inaccessible to a single small battery without an aggregator/telemetry.").font = Font(name="Arial", italic=True, size=9, color="666666")
+p_line("a_om", "Battery O&M & insurance", lambda i: f"=-{YC[0]}{rows_p['bcapex']}*{PR['p_om_pct']}")
+p_line("a_debt", "Battery debt service", lambda i: f"=-{YC[i]}{rows_p['bdebt']}")
+p_line("a_equity", "Battery equity paid (year 1)", lambda i: f"=-{YC[i]}{rows_p['bcapex']}*(1-{PR['p_debt_pct']})")
+p_line("a_net", "NET CASH TO OWNER — without scheme", lambda i: f"=SUM({YC[i]}{rows_p['a_ppa']}:{YC[i]}{rows_p['a_equity']})", bold=True)
+
+p_sec("B. WITH the scheme (we run forecasting, bidding, dispatch; owner owns battery)")
+p_line("b_ppa", "PPA revenue", lambda i: f"={YC[i]}{rows_p['a_ppa']}")
+p_line("b_untied", "Untied power: baseline realisation", lambda i: f"={YC[i]}{rows_p['a_untied']}")
+p_line("b_uplift", "  + exchange uplift from block-by-block selling (gross)", lambda i: f"={YC[i]}{rows_p['gen_untied']}*10*{REF['uplift']}*{ser('spread_idx', i)}")
+p_line("b_uplift_fee", "  − our share of the uplift", lambda i: f"=-{YC[i]}{rows_p['b_uplift']}*{ser('untied_share_our', i)}")
+p_line("b_trader", "Trading margin paid (to us, from licence year; to a trader before)", lambda i: f"={YC[i]}{rows_p['a_trader']}")
+p_line("b_dsm", "Deviation charges paid (after 30% reduction)", lambda i: f"={YC[i]}{rows_p['a_dsm']}*(1-{REF['dsm_recov']})")
+p_line("b_dsm_fee", "  − our share of charges avoided", lambda i: f"={YC[i]}{rows_p['a_dsm']}*{REF['dsm_recov']}*{REF['dsm_share']}")
+p_line("b_arb", "Battery arbitrage (optimised dispatch, gross)", lambda i: f"={YC[i]}{rows_p['bmwh']}*{REF['arb_per_mwh']}*{ser('spread_idx', i)}")
+p_line("b_arb_fee", "  − our share of arbitrage", lambda i: f"=-{YC[i]}{rows_p['b_arb']}*{REF['batt_share']}")
+p_line("b_grid", "Ancillary & capacity payments via our aggregated bids (gross)", lambda i: f"={YC[i]}{rows_p['bmw']}*{REF['grid_per_mw']}*{ser('grid_active', i)}")
+p_line("b_grid_fee", "  − our share", lambda i: f"=-{YC[i]}{rows_p['b_grid']}*{REF['grid_share']}")
+p_line("b_onboard", "Onboarding fee (year 1)", lambda i: f"=-{REF['onboard_fee']}" if i == 0 else "=0")
+p_line("b_om", "Battery O&M & insurance", lambda i: f"={YC[i]}{rows_p['a_om']}")
+p_line("b_debt", "Battery debt service", lambda i: f"={YC[i]}{rows_p['a_debt']}")
+p_line("b_equity", "Battery equity paid (year 1)", lambda i: f"={YC[i]}{rows_p['a_equity']}")
+p_line("b_net", "NET CASH TO OWNER — with scheme", lambda i: f"=SUM({YC[i]}{rows_p['b_ppa']}:{YC[i]}{rows_p['b_equity']})", bold=True)
+
+p_sec("C. The difference")
+p_line("c_gross", "Value created for the owner before our fees", lambda i: f"={YC[i]}{rows_p['b_uplift']}+({YC[i]}{rows_p['b_dsm']}-{YC[i]}{rows_p['a_dsm']})+({YC[i]}{rows_p['b_arb']}-{YC[i]}{rows_p['a_arb']})+{YC[i]}{rows_p['b_grid']}")
+p_line("c_fees", "Fees paid to us", lambda i: f"=-({YC[i]}{rows_p['b_uplift_fee']}+{YC[i]}{rows_p['b_dsm_fee']}+{YC[i]}{rows_p['b_arb_fee']}+{YC[i]}{rows_p['b_grid_fee']}+{YC[i]}{rows_p['b_onboard']})")
+p_line("c_net", "OWNER'S NET BENEFIT (with − without)", lambda i: f"={YC[i]}{rows_p['b_net']}-{YC[i]}{rows_p['a_net']}", bold=True)
+p_line("c_cum", "Cumulative net benefit", lambda i: f"={YC[i]}{rows_p['c_net']}" if i == 0 else f"={YC[i-1]}{rows_p['c_cum']}+{YC[i]}{rows_p['c_net']}")
+p_line("c_pct", "Net benefit as % of plant revenue", lambda i: f"=IF({YC[i]}{rows_p['a_ppa']}+{YC[i]}{rows_p['a_untied']}=0,0,{YC[i]}{rows_p['c_net']}/({YC[i]}{rows_p['a_ppa']}+{YC[i]}{rows_p['a_untied']}))", fmt=PCT)
+p_line("c_ratio", "Owner keeps this many rupees per rupee paid to us", lambda i: f"=IF({YC[i]}{rows_p['c_fees']}=0,0,{YC[i]}{rows_p['c_net']}/{YC[i]}{rows_p['c_fees']})", fmt='0.0"x"')
+p_line("c_batt_roi", "Memo: owner's battery cash return (arbitrage + grid − O&M − debt), with scheme",
+       lambda i: f"={YC[i]}{rows_p['b_arb']}+{YC[i]}{rows_p['b_arb_fee']}+{YC[i]}{rows_p['b_grid']}+{YC[i]}{rows_p['b_grid_fee']}+{YC[i]}{rows_p['b_om']}+{YC[i]}{rows_p['b_debt']}")
+p_line("c_batt_roi_a", "Memo: same, without scheme",
+       lambda i: f"={YC[i]}{rows_p['a_arb']}+{YC[i]}{rows_p['a_om']}+{YC[i]}{rows_p['a_debt']}")
+prow += 1
+P.cell(row=prow, column=1, value="Reading this sheet: the PPA, the battery purchase and its loan are identical in A and B. The only differences are better selling of untied power, fewer deviation charges, better battery dispatch, access to grid-service payments, and the fees paid to us. Market indices (spread compression, deviation-charge tightening, grid-service timing) come from the Assumptions sheet so the plant view and the company model stay consistent.").font = Font(name="Arial", italic=True, size=9)
+P.cell(row=prow, column=1).alignment = Alignment(wrap_text=True)
+P.row_dimensions[prow].height = 48
+P.freeze_panes = "C4"
+
 # ---------------------------------------------------------------- README
 Rd = wb.create_sheet("README", 1)
 style_sheet(Rd, {"A": 120})
@@ -623,6 +725,7 @@ for k, (text, font) in enumerate(lines, start=1):
 for ws in (A, H, Rv, O, C, F, S):
     ws.freeze_panes = "C4"
 
+wb._sheets = [wb["Summary"], wb["README"], wb["Plant View"], wb["Assumptions"], wb["Headcount"], wb["Revenue"], wb["Opex"], wb["Capex & WC"], wb["Cash Flow"]]
 out = "/home/user/Play/model/Energy_intelligence_10yr_model.xlsx"
 wb.save(out)
 print("saved", out)
